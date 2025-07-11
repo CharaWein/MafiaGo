@@ -13,7 +13,33 @@ var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool { return true },
 }
 
-func WebSocketHandler(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) getPlayerByConn(conn *websocket.Conn) *game.Player {
+	gamesMutex.Lock()
+	defer gamesMutex.Unlock()
+
+	for _, g := range games {
+		for _, p := range g.Players {
+			if p.Conn == conn {
+				return p
+			}
+		}
+	}
+	return nil
+}
+
+func (h *Handler) getGameByPlayer(playerID string) *game.Game {
+	gamesMutex.Lock()
+	defer gamesMutex.Unlock()
+
+	for _, g := range games {
+		if _, exists := g.Players[playerID]; exists {
+			return g
+		}
+	}
+	return nil
+}
+
+func (h *Handler) WebSocketHandler(w http.ResponseWriter, r *http.Request) {
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Printf("WebSocket upgrade failed: %v", err)
@@ -35,6 +61,14 @@ func WebSocketHandler(w http.ResponseWriter, r *http.Request) {
 
 	player := game.NewPlayer(playerName, conn)
 	gameInstance.AddPlayer(player)
+
+	isHost := len(gameInstance.Players) == 1
+	conn.WriteJSON(game.Message{
+		Type: "host_status",
+		Payload: map[string]bool{
+			"is_host": isHost,
+		},
+	})
 
 	for {
 		var msg game.Message
@@ -63,8 +97,44 @@ func WebSocketHandler(w http.ResponseWriter, r *http.Request) {
 			if ready, ok := msg.Payload.(bool); ok {
 				gameInstance.SetReadyStatus(player.ID, ready)
 			}
+		case "start_game":
+			h.handleStartGame(conn)
 		}
 	}
+}
+
+func (h *Handler) handleStartGame(ws *websocket.Conn) {
+	player := h.getPlayerByConn(ws)
+	if player == nil {
+		return
+	}
+
+	game := h.getGameByPlayer(player.ID)
+	if game == nil {
+		return
+	}
+
+	// Проверяем, что это ведущий (первый подключившийся игрок)
+	if len(game.Players) > 0 {
+		firstPlayerID := ""
+		for id := range game.Players {
+			firstPlayerID = id
+			break
+		}
+		if firstPlayerID == player.ID {
+			game.Start()
+			h.broadcastGameState(game)
+		}
+	}
+}
+
+func (h *Handler) broadcastGameState(g *game.Game) {
+	state := g.GetGameState()
+	msg := game.Message{
+		Type:    "game_state",
+		Payload: state,
+	}
+	g.Broadcast(msg)
 }
 
 func broadcastChat(g *game.Game, sender *game.Player, text string) {

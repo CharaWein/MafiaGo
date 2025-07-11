@@ -4,6 +4,14 @@ class MafiaGame {
         this.gameId = null;
         this.playerId = null;
         this.playerName = null;
+        this.isHost = false;
+        document.getElementById('start-game-btn').addEventListener('click', () => this.startGame());
+        
+        // Убедимся, что кнопка существует перед добавлением обработчика
+        const startBtn = document.getElementById('start-game-btn');
+        if (startBtn) {
+            startBtn.addEventListener('click', () => this.startGame());
+        }
         
         this.initEventListeners();
     }
@@ -12,6 +20,56 @@ class MafiaGame {
         document.getElementById('create-game-btn').addEventListener('click', () => this.createGame());
         document.getElementById('join-game-btn').addEventListener('click', () => this.joinGame());
         document.getElementById('send-message-btn').addEventListener('click', () => this.sendChatMessage());
+    }
+
+    handleGameMessage(message) {
+        switch(msg.type) {
+            case 'host_status':
+                this.isHost = msg.payload.is_host;
+                if (this.isHost) {
+                    document.getElementById('start-game-btn').classList.remove('hidden');
+                }
+                break;
+            case 'role_assigned':
+                this.handleRoleAssignment(msg.role);
+                break;
+            case 'game_started':
+                this.showGameInterface();
+                break;
+            case 'game_state':
+                this.updateGameState(msg.payload);
+                break;
+            case 'chat_message':
+                this.addChatMessage(msg.payload);
+                break;
+            default:
+                console.log('Неизвестный тип сообщения:', msg);
+        }
+    }
+
+    startGame() {
+        if (this.socket && this.isHost) {
+            this.socket.send(JSON.stringify({
+                type: 'start_game'
+            }));
+        }
+    }
+
+    handleRoleAssignment(role) {
+        this.role = role;
+        document.getElementById('role-name').textContent = this.getRoleName(role);
+        document.getElementById('role-description').textContent = this.getRoleDescription(role);
+        document.getElementById('role-info').classList.remove('hidden');
+    }
+
+    getRoleName(role) {
+        const roleNames = {
+            'don': 'Дон мафии',
+            'mafia': 'Мафия',
+            'sheriff': 'Шериф',
+            'civilian': 'Мирный житель'
+        };
+        return roleNames[role] || role;
     }
     
     async createGame() {
@@ -48,60 +106,63 @@ class MafiaGame {
                 body: JSON.stringify({ player_name: this.playerName })
             });
             
-            const data = await response.json();
-            
-            if (data.status === 'joined') {
-                this.connectWebSocket();
-                document.getElementById('lobby-screen').style.display = 'none';
-                document.getElementById('game-screen').style.display = 'block';
-                this.showMessage(`Вы присоединились к игре как ${this.playerName}`);
-            } else {
-                this.showMessage('Ошибка при присоединении к игре');
+            // Проверяем статус ответа
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(errorText || 'Ошибка при присоединении к игре');
             }
+            
+            // Пытаемся распарсить JSON только если ответ не пустой
+            let data = {};
+            if (response.status !== 204) { // 204 - No Content
+                data = await response.json();
+            }
+            
+            this.connectWebSocket();
+            document.getElementById('lobby-screen').style.display = 'none';
+            document.getElementById('game-screen').style.display = 'block';
+            this.showMessage(`Вы присоединились к игре как ${this.playerName}`);
         } catch (error) {
-            this.showMessage(`Ошибка: ${error}`);
+            this.showMessage(`Ошибка: ${error.message}`);
+            console.error('Join game error:', error);
         }
     }
     
     connectWebSocket() {
-		const protocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
-		const wsUrl = `${protocol}${window.location.host}/ws?game_id=${this.gameId}&name=${encodeURIComponent(this.playerName)}`;
-		
-		this.socket = new WebSocket(wsUrl);
+        const protocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
+        const wsUrl = `${protocol}${window.location.host}/ws?game_id=${this.gameId}&name=${encodeURIComponent(this.playerName)}`;
+        
+        this.socket = new WebSocket(wsUrl);
 
-		this.socket.onmessage = (event) => {
-			const msg = JSON.parse(event.data);
-			switch(msg.type) {
-				case 'game_state':
-					this.updateGameState(msg.payload);
-					break;
-				case 'role_assigned':
-					this.handleRole(msg.role);
-					break;
-				case 'night_start':
-					this.showNightInterface();
-					break;
-				case 'day_start':
-					this.showVotingInterface();
-					break;
-				case 'player_killed':
-					this.showKilledPlayer(msg.payload);
-					break;
-			}
-		};
-	}
-    
-    handleGameMessage(message) {
-        switch(message.type) {
-            case 'game_state':
-                this.updateGameState(message.payload);
-                break;
-            case 'chat_message':
-                this.addChatMessage(message.payload);
-                break;
-            default:
-                console.log('Неизвестный тип сообщения:', message);
-        }
+        this.socket.onopen = () => {
+            console.log('WebSocket соединение установлено');
+        };
+
+        this.socket.onmessage = (event) => {
+            const msg = JSON.parse(event.data);
+            console.log('Получено сообщение:', msg);
+            
+            switch(msg.type) {
+                case 'host_status':
+                    this.isHost = msg.payload.is_host;
+                    console.log('Статус хоста:', this.isHost);
+                    if (this.isHost) {
+                        document.getElementById('start-game-btn').classList.remove('hidden');
+                    }
+                    break;
+                case 'game_state':
+                    this.updateGameState(msg.payload);
+                    break;
+                case 'role_assigned':
+                    this.handleRoleAssignment(msg.payload.role);
+                    break;
+                // ... остальные обработчики ...
+            }
+        };
+
+        this.socket.onerror = (error) => {
+            console.error('WebSocket ошибка:', error);
+        };
     }
     
     updateGameState(state) {

@@ -10,14 +10,12 @@ import (
 
 func main() {
 	r := mux.NewRouter()
+	h := handlers.NewHandler() // Используем короткое имя h вместо handler
 
-	// API routes
-	r.HandleFunc("/create", handlers.CreateGame).Methods("POST")
-	r.HandleFunc("/join/{gameID}", handlers.JoinGame).Methods("POST")
-	r.HandleFunc("/state/{gameID}", handlers.GetGameState).Methods("GET")
-
-	// WebSocket
-	r.HandleFunc("/ws", handlers.WebSocketHandler)
+	r.HandleFunc("/create", h.CreateGame).Methods("POST")
+	r.HandleFunc("/join/{gameID}", h.JoinGame).Methods("POST")
+	r.HandleFunc("/state/{gameID}", h.GetGameState).Methods("GET")
+	r.HandleFunc("/ws", h.WebSocketHandler)
 
 	// Static files
 	r.PathPrefix("/").Handler(http.FileServer(http.Dir("./static")))

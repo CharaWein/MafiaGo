@@ -245,3 +245,63 @@ func (g *Game) GetGameState() GameState {
 		Winner:    g.Winner,
 	}
 }
+
+func (g *Game) assignRoles() {
+	// Реализация распределения ролей
+	playerCount := len(g.Players)
+	if playerCount < 4 {
+		return // Минимум 4 игрока для игры
+	}
+
+	// Создаем список ID игроков
+	playerIDs := make([]string, 0, playerCount)
+	for id := range g.Players {
+		playerIDs = append(playerIDs, id)
+	}
+
+	// Перемешиваем ID
+	rand.Shuffle(playerCount, func(i, j int) {
+		playerIDs[i], playerIDs[j] = playerIDs[j], playerIDs[i]
+	})
+
+	// Распределяем роли
+	for i, id := range playerIDs {
+		switch i {
+		case 0:
+			g.Players[id].Role = RoleDon
+		case 1:
+			g.Players[id].Role = RoleSheriff
+		default:
+			if i < playerCount/3+1 {
+				g.Players[id].Role = RoleMafia
+			} else {
+				g.Players[id].Role = RoleCivilian
+			}
+		}
+	}
+}
+
+func (g *Game) Start() {
+	g.Mu.Lock()
+	defer g.Mu.Unlock()
+
+	if g.Phase != "lobby" {
+		return
+	}
+
+	g.assignRoles()
+	g.Phase = "night"
+	g.DayNumber = 1
+
+	// Отправляем игрокам их роли
+	for _, p := range g.Players {
+		if p.Conn != nil {
+			p.Conn.WriteJSON(Message{
+				Type: "role_assigned",
+				Payload: map[string]interface{}{
+					"role": p.Role,
+				},
+			})
+		}
+	}
+}
