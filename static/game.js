@@ -159,7 +159,7 @@ class MafiaGame {
                 case 'host_status':
                     this.isHost = msg.payload.is_host;
                     console.log('Статус хоста:', this.isHost);
-                    if (this.isHost) {
+                    if (this.isHost && document.getElementById('game-phase').textContent === 'Лобби') {
                         document.getElementById('start-game-btn').classList.remove('hidden');
                     }
                     break;
@@ -199,8 +199,12 @@ class MafiaGame {
         document.getElementById('game-phase').textContent = state.phase === 'night' ? 'Ночь' : 'День';
         document.getElementById('game-day').textContent = state.day_number;
         
-        if (state.phase !== 'lobby') {
-            document.getElementById('start-game-btn').classList.add('hidden');
+        // Управляем видимостью кнопки "Начать игру"
+        const startBtn = document.getElementById('start-game-btn');
+        if (state.phase === 'lobby' && this.isHost) {
+            startBtn.classList.remove('hidden');
+        } else {
+            startBtn.classList.add('hidden');
         }
 
         const playersList = document.getElementById('players-list');

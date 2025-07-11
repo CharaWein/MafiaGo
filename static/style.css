@@ -163,7 +163,12 @@ button {
     border: none;
     border-radius: 4px;
     cursor: pointer;
-    margin-top: 20px;
+    margin: 10px 0;
+    display: none; /* По умолчанию скрыта */
+}
+
+#start-game-btn.visible {
+    display: block;
 }
 
 #start-game-btn:hover {
