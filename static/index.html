@@ -36,6 +36,30 @@
                 <input type="text" id="chat-input" placeholder="Сообщение">
                 <button id="send-message-btn">Отправить</button>
             </div>
+
+            <div id="role-info" class="hidden">
+                <h2>Ваша роль: <span id="role-name"></span></h2>
+                <p id="role-description"></p>
+            </div>
+            
+            <div id="action-panel" class="hidden">
+                <h3 id="action-title"></h3>
+                <div id="players-to-select"></div>
+                <button id="confirm-action">Подтвердить</button>
+            </div>
+            
+            <div id="game-end" class="hidden">
+                <h2>Игра окончена!</h2>
+                <p id="winner-message"></p>
+            </div>
+        </div>
+
+        <div class="chat-container">
+            <div id="chat-messages"></div>
+            <div class="chat-controls">
+                <input type="text" id="chat-input" placeholder="Введите сообщение...">
+                <button onclick="game.sendChatMessage()">Отправить</button>
+            </div>
         </div>
     </div>
     

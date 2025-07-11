@@ -1,31 +1,39 @@
 package game
 
 import (
-	"math"
 	"math/rand"
 	"sync"
 	"time"
 )
 
+const (
+	gameIDChars  = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+	gameIDLength = 6
+)
+
+func init() {
+	rand.Seed(time.Now().UnixNano())
+}
+
+func generateGameID() string {
+	b := make([]byte, gameIDLength)
+	for i := range b {
+		b[i] = gameIDChars[rand.Intn(len(gameIDChars))]
+	}
+	return string(b)
+}
+
 type Game struct {
 	ID           string
 	Players      map[string]*Player
 	Mu           sync.Mutex
-	Phase        string // "lobby", "night", "day", "ended"
+	Phase        string
 	DayNumber    int
-	Winner       string // "mafia", "civilians"
+	Winner       string
 	CreatedAt    time.Time
-	Votes        map[string]int    // Для дневного голосования
-	NightActions map[string]string // Для ночных действий
-}
-
-func generateGameID() string {
-	const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-	b := make([]byte, 6)
-	for i := range b {
-		b[i] = chars[rand.Intn(len(chars))]
-	}
-	return string(b)
+	Votes        map[string]string
+	NightActions map[string]string
+	readyPlayers int
 }
 
 func NewGame() *Game {
@@ -35,28 +43,61 @@ func NewGame() *Game {
 		Phase:        "lobby",
 		DayNumber:    0,
 		CreatedAt:    time.Now(),
-		Votes:        make(map[string]int),
+		Votes:        make(map[string]string),
 		NightActions: make(map[string]string),
+		readyPlayers: 0,
 	}
 }
 
-func (g *Game) Start() {
+func (g *Game) AddPlayer(p *Player) {
+	g.Mu.Lock()
+	defer g.Mu.Unlock()
+	g.Players[p.ID] = p
+}
+
+func (g *Game) RemovePlayer(playerID string) {
+	g.Mu.Lock()
+	defer g.Mu.Unlock()
+	delete(g.Players, playerID)
+}
+
+func (g *Game) Broadcast(msg Message) error {
 	g.Mu.Lock()
 	defer g.Mu.Unlock()
 
-	g.assignRoles()
-	g.Phase = "night"
-	g.DayNumber = 1
-	g.notifyAll()
+	var lastErr error
+	for _, p := range g.Players {
+		if p.Conn != nil {
+			if err := p.Conn.WriteJSON(msg); err != nil {
+				lastErr = err
+			}
+		}
+	}
+	return lastErr
 }
 
-// Реализация недостающих методов:
+func (g *Game) getAlivePlayers() []*Player {
+	g.Mu.Lock()
+	defer g.Mu.Unlock()
 
-func (g *Game) getMafiaVote() string {
+	var alive []*Player
+	for _, p := range g.Players {
+		if p.Alive {
+			alive = append(alive, p)
+		}
+	}
+	return alive
+}
+
+func (g *Game) getAliveCount() int {
+	return len(g.getAlivePlayers())
+}
+
+func (g *Game) getMafiaTarget() string {
 	votes := make(map[string]int)
-	for _, action := range g.NightActions {
-		if action != "" {
-			votes[action]++
+	for _, p := range g.Players {
+		if p.IsMafia() && p.Alive && g.NightActions[p.ID] != "" {
+			votes[g.NightActions[p.ID]]++
 		}
 	}
 
@@ -71,138 +112,136 @@ func (g *Game) getMafiaVote() string {
 	return target
 }
 
-func (g *Game) getSheriffCheck() string {
-	for playerID, p := range g.Players {
-		if p.Role == RoleSheriff {
-			return g.NightActions[playerID]
+func (g *Game) processDayVotes() {
+	voteCount := make(map[string]int)
+	for _, target := range g.Votes {
+		if target != "" {
+			voteCount[target]++
 		}
 	}
-	return ""
-}
 
-func (g *Game) getDonCheck() string {
-	for playerID, p := range g.Players {
-		if p.Role == RoleDon {
-			return g.NightActions[playerID]
-		}
-	}
-	return ""
-}
-
-func (g *Game) getMajorityVote() string {
 	maxVotes := 0
-	var target string
-
-	for playerID, count := range g.Votes {
+	var toKill string
+	for target, count := range voteCount {
 		if count > maxVotes {
 			maxVotes = count
-			target = playerID
+			toKill = target
 		} else if count == maxVotes {
-			// При ничьей никто не умирает
-			target = ""
+			toKill = ""
 		}
 	}
 
-	if maxVotes == 0 {
-		return ""
+	if toKill != "" && maxVotes > g.getAliveCount()/2 {
+		g.Players[toKill].Alive = false
 	}
-	return target
+	g.Votes = make(map[string]string)
+}
+
+func (g *Game) SetNightAction(playerID, targetID string) {
+	g.Mu.Lock()
+	defer g.Mu.Unlock()
+	g.NightActions[playerID] = targetID
+}
+
+func (g *Game) SetVote(playerID, targetID string) {
+	g.Mu.Lock()
+	defer g.Mu.Unlock()
+	g.Votes[playerID] = targetID
+}
+
+func (g *Game) SetReadyStatus(playerID string, ready bool) {
+	g.Mu.Lock()
+	defer g.Mu.Unlock()
+
+	if p, exists := g.Players[playerID]; exists {
+		if p.Ready != ready {
+			p.Ready = ready
+			if ready {
+				g.readyPlayers++
+			} else {
+				g.readyPlayers--
+			}
+		}
+	}
+}
+
+func (g *Game) getSheriffID() string {
+	g.Mu.Lock()
+	defer g.Mu.Unlock()
+
+	for id, p := range g.Players {
+		if p.Role == RoleSheriff && p.Alive {
+			return id
+		}
+	}
+	return ""
+}
+
+func (g *Game) getDonID() string {
+	g.Mu.Lock()
+	defer g.Mu.Unlock()
+
+	for id, p := range g.Players {
+		if p.Role == RoleDon && p.Alive {
+			return id
+		}
+	}
+	return ""
+}
+
+func (g *Game) checkGameEnd() bool {
+	aliveMafia := 0
+	aliveCivilians := 0
+
+	for _, p := range g.getAlivePlayers() {
+		if p.IsMafia() {
+			aliveMafia++
+		} else {
+			aliveCivilians++
+		}
+	}
+
+	if aliveMafia == 0 {
+		g.Winner = "civilians"
+		return true
+	}
+
+	if aliveMafia >= aliveCivilians {
+		g.Winner = "mafia"
+		return true
+	}
+
+	return false
 }
 
 func (g *Game) notifyAll() {
-	for _, p := range g.Players {
-		if p.Conn != nil {
-			state := g.gameStateForPlayer(p)
-			p.Conn.WriteJSON(state)
-		}
+	state := g.GetGameState()
+	msg := Message{
+		Type:    MsgGameState,
+		Payload: state,
 	}
+	g.Broadcast(msg)
 }
 
-func (g *Game) gameStateForPlayer(p *Player) Message {
-	publicPlayers := make([]PlayerPublic, 0)
-	for _, player := range g.Players {
-		publicPlayers = append(publicPlayers, PlayerPublic{
-			ID:    player.ID,
-			Name:  player.Name,
-			Alive: player.Alive,
-			Role:  g.getRevealedRole(p, player),
+func (g *Game) GetGameState() GameState {
+	g.Mu.Lock()
+	defer g.Mu.Unlock()
+
+	var players []PlayerInfo
+	for _, p := range g.Players {
+		players = append(players, PlayerInfo{
+			ID:    p.ID,
+			Name:  p.Name,
+			Alive: p.Alive,
+			Role:  p.Role,
+			Ready: p.Ready,
 		})
 	}
 
-	return Message{
-		Type: MsgGameState,
-		Payload: GameState{
-			Phase:     g.Phase,
-			DayNumber: g.DayNumber,
-			Players:   publicPlayers,
-			Winner:    g.Winner,
-			YourRole:  p.Role,
-		},
-	}
-}
-
-func (g *Game) getRevealedRole(currentPlayer, targetPlayer *Player) string {
-	// Показываем роль только если:
-	// 1. Игра закончена
-	// 2. Игрок мертв
-	// 3. Это шериф проверял мафию/дона
-	if g.Phase == "ended" || !targetPlayer.Alive {
-		return targetPlayer.Role
-	}
-
-	// Шериф видит результаты своих проверок
-	if currentPlayer.Role == RoleSheriff {
-		if check, exists := g.NightActions[currentPlayer.ID]; exists && check == targetPlayer.ID {
-			if targetPlayer.Role == RoleMafia || targetPlayer.Role == RoleDon {
-				return "mafia"
-			}
-			return "civilian"
-		}
-	}
-
-	return ""
-}
-
-func (g *Game) assignRoles() {
-	playerCount := len(g.Players)
-	if playerCount < 4 {
-		return // Недостаточно игроков
-	}
-
-	// Вычисляем количество мафии (без дона)
-	mafiaCount := int(math.Floor(float64(playerCount-5) / 2))
-	if mafiaCount < 1 {
-		mafiaCount = 1
-	}
-
-	// Создаем список ID игроков
-	playerIDs := make([]string, 0, len(g.Players))
-	for id := range g.Players {
-		playerIDs = append(playerIDs, id)
-	}
-
-	// Перемешиваем игроков
-	rand.Shuffle(len(playerIDs), func(i, j int) {
-		playerIDs[i], playerIDs[j] = playerIDs[j], playerIDs[i]
-	})
-
-	// Распределяем роли
-	roles := make([]string, 0)
-	roles = append(roles, RoleDon)
-	for i := 0; i < mafiaCount; i++ {
-		roles = append(roles, RoleMafia)
-	}
-	roles = append(roles, RoleSheriff)
-	for i := len(roles); i < len(playerIDs); i++ {
-		roles = append(roles, RoleCivilian)
-	}
-
-	// Назначаем роли
-	for i, id := range playerIDs {
-		if i < len(roles) {
-			g.Players[id].Role = roles[i]
-		} else {
-			g.Players[id].Role = RoleCivilian
-		}
+	return GameState{
+		Phase:     g.Phase,
+		DayNumber: g.DayNumber,
+		Players:   players,
+		Winner:    g.Winner,
 	}
 }

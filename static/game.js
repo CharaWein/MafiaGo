@@ -64,25 +64,32 @@ class MafiaGame {
     }
     
     connectWebSocket() {
-        // Заменяем ws:// на wss://
-        const protocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
-        const wsUrl = `${protocol}${window.location.host}/ws/${this.gameId}?player=${encodeURIComponent(this.playerName)}`;
-        
-        this.socket = new WebSocket(wsUrl);
-        
-        this.socket.onopen = () => {
-            this.showMessage('Соединение установлено');
-        };
-        
-        this.socket.onmessage = (event) => {
-            const message = JSON.parse(event.data);
-            this.handleGameMessage(message);
-        };
-        
-        this.socket.onclose = () => {
-            this.showMessage('Соединение закрыто');
-        };
-    }
+		const protocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
+		const wsUrl = `${protocol}${window.location.host}/ws?game_id=${this.gameId}&name=${encodeURIComponent(this.playerName)}`;
+		
+		this.socket = new WebSocket(wsUrl);
+
+		this.socket.onmessage = (event) => {
+			const msg = JSON.parse(event.data);
+			switch(msg.type) {
+				case 'game_state':
+					this.updateGameState(msg.payload);
+					break;
+				case 'role_assigned':
+					this.handleRole(msg.role);
+					break;
+				case 'night_start':
+					this.showNightInterface();
+					break;
+				case 'day_start':
+					this.showVotingInterface();
+					break;
+				case 'player_killed':
+					this.showKilledPlayer(msg.payload);
+					break;
+			}
+		};
+	}
     
     handleGameMessage(message) {
         switch(message.type) {
@@ -139,6 +146,79 @@ class MafiaGame {
     showMessage(text) {
         console.log(text);
         // Можно добавить отображение сообщений в UI
+    }
+
+    handleGameMessage(message) {
+        switch (message.type) {
+            case 'game_state':
+                this.updateGameState(message.payload);
+                break;
+            case 'role_info':
+                this.showRole(message.payload);
+                break;
+            case 'night_start':
+                this.showNightActions();
+                break;
+            case 'day_start':
+                this.showVoting();
+                break;
+            case 'game_end':
+                this.showGameEnd(message.payload);
+                break;
+        }
+    }
+    
+    showNightActions() {
+        if (this.role === 'mafia' || this.role === 'don') {
+            this.showPlayerSelector('Выберите цель для ночного действия:', players => {
+                this.socket.send(JSON.stringify({
+                    type: 'night_action',
+                    target: players[0].id
+                }));
+            });
+        }
+    }
+    
+    showVoting() {
+        this.showPlayerSelector('Голосуйте, кого казнить:', players => {
+            this.socket.send(JSON.stringify({
+                type: 'vote',
+                target: players[0].id
+            }));
+        });
+    }
+
+    handleChatMessage(message) {
+        const chat = document.getElementById('chat-messages');
+        const msgElement = document.createElement('div');
+        msgElement.innerHTML = `
+            <strong>${message.sender}</strong> 
+            [${message.time}]: ${message.text}
+        `;
+        chat.appendChild(msgElement);
+        chat.scrollTop = chat.scrollHeight;
+    }
+
+    sendChatMessage() {
+        const input = document.getElementById('chat-input');
+        const text = input.value.trim();
+        
+        if (text && this.socket) {
+            this.socket.send(JSON.stringify({
+                type: 'chat',
+                payload: text
+            }));
+            input.value = '';
+        }
+    }
+
+    setReadyStatus(ready) {
+        if (this.socket) {
+            this.socket.send(JSON.stringify({
+                type: 'ready',
+                payload: ready
+            }));
+        }
     }
 }
 

@@ -9,14 +9,14 @@ import (
 )
 
 func CreateGame(w http.ResponseWriter, r *http.Request) {
-	g := game.NewGame()
-
 	gamesMutex.Lock()
-	games[g.ID] = g
-	gamesMutex.Unlock()
+	defer gamesMutex.Unlock()
+
+	newGame := game.NewGame()
+	games[newGame.ID] = newGame
 
 	json.NewEncoder(w).Encode(map[string]string{
-		"game_id": g.ID,
+		"game_id": newGame.ID,
 	})
 }
 
@@ -25,7 +25,7 @@ func JoinGame(w http.ResponseWriter, r *http.Request) {
 	gameID := vars["gameID"]
 
 	gamesMutex.Lock()
-	g, exists := games[gameID]
+	_, exists := games[gameID]
 	gamesMutex.Unlock()
 
 	if !exists {
@@ -42,13 +42,6 @@ func JoinGame(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Добавляем игрока
-	gamesMutex.Lock()
-	defer gamesMutex.Unlock()
-
-	player := game.NewPlayer(data.PlayerName, nil) // nil - временно, потом заменим на WebSocket
-	g.Players[player.ID] = player
-
 	json.NewEncoder(w).Encode(map[string]string{
 		"status":  "joined",
 		"game_id": gameID,
@@ -60,7 +53,7 @@ func GetGameState(w http.ResponseWriter, r *http.Request) {
 	gameID := vars["gameID"]
 
 	gamesMutex.Lock()
-	g, exists := games[gameID]
+	game, exists := games[gameID]
 	gamesMutex.Unlock()
 
 	if !exists {
@@ -68,17 +61,6 @@ func GetGameState(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"status":  "ok",
-		"game_id": gameID,
-		"phase":   g.Phase,
-		"players": len(g.Players),
-		"day":     g.DayNumber,
-	})
-}
-
-func enableCORS(w *http.ResponseWriter) {
-	(*w).Header().Set("Access-Control-Allow-Origin", "*")
-	(*w).Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE")
-	(*w).Header().Set("Access-Control-Allow-Headers", "Accept, Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization")
+	state := game.GetGameState()
+	json.NewEncoder(w).Encode(state)
 }

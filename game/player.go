@@ -8,35 +8,41 @@ import (
 )
 
 type Player struct {
-	ID       string
-	Name     string
-	Role     string
-	Conn     *websocket.Conn
-	Alive    bool
-	VotedFor string
-	IsReady  bool
+	ID          string
+	Name        string
+	Role        string
+	Conn        *websocket.Conn
+	Alive       bool
+	Ready       bool
+	LastSeen    time.Time
+	VotedFor    string
+	NightAction string
 }
 
 func NewPlayer(name string, conn *websocket.Conn) *Player {
 	return &Player{
-		ID:      generateID(),
-		Name:    name,
-		Conn:    conn,
-		Alive:   true,
-		IsReady: false,
+		ID:       generateID(),
+		Name:     name,
+		Conn:     conn,
+		Alive:    true,
+		Ready:    false,
+		LastSeen: time.Now(),
 	}
 }
 
 func generateID() string {
-	return "player_" + randString(8)
-}
-
-func randString(n int) string {
-	const letters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-	rand.Seed(time.Now().UnixNano())
-	b := make([]byte, n)
+	const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	b := make([]byte, 16)
 	for i := range b {
-		b[i] = letters[rand.Intn(len(letters))]
+		b[i] = chars[rand.Intn(len(chars))]
 	}
 	return string(b)
+}
+
+func (p *Player) IsMafia() bool {
+	return p.Role == RoleMafia || p.Role == RoleDon
+}
+
+func (p *Player) IsActive() bool {
+	return time.Since(p.LastSeen) < 2*time.Minute
 }

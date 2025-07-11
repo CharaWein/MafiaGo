@@ -3,8 +3,6 @@ package main
 import (
 	"log"
 	"net/http"
-	"os"
-	"path/filepath"
 
 	"github.com/CharaWein/mafia-game/handlers"
 	"github.com/gorilla/mux"
@@ -19,26 +17,11 @@ func main() {
 	r.HandleFunc("/state/{gameID}", handlers.GetGameState).Methods("GET")
 
 	// WebSocket
-	r.HandleFunc("/ws/{gameID}", handlers.WebSocketHandler)
+	r.HandleFunc("/ws", handlers.WebSocketHandler)
 
-	// Serve static files from /static directory
-	workDir, _ := os.Getwd()
-	staticDir := filepath.Join(workDir, "static")
-	fs := http.FileServer(http.Dir(staticDir))
+	// Static files
+	r.PathPrefix("/").Handler(http.FileServer(http.Dir("./static")))
 
-	// Handle all requests with the file server
-	r.PathPrefix("/").Handler(fs)
-
-	// Special handler for favicon
-	r.HandleFunc("/favicon.ico", func(w http.ResponseWriter, r *http.Request) {
-		http.ServeFile(w, r, filepath.Join(staticDir, "favicon.ico"))
-	})
-
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8080"
-	}
-
-	log.Printf("Server starting on :%s", port)
-	log.Fatal(http.ListenAndServe(":"+port, r))
+	log.Println("Server starting on :8080")
+	log.Fatal(http.ListenAndServe(":8080", r))
 }
