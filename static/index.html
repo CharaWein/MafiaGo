@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Онлайн Мафия</title>
+    <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Онлайн Мафия</h1>
+        
+        <div id="lobby-screen">
+            <button id="create-game-btn">Создать игру</button>
+            <div class="join-game">
+                <input type="text" id="game-id-input" placeholder="ID игры">
+                <input type="text" id="player-name-input" placeholder="Ваше имя">
+                <button id="join-game-btn">Присоединиться</button>
+            </div>
+        </div>
+        
+        <div id="game-screen" style="display: none;">
+            <div class="game-info">
+                <div>ID игры: <span id="game-id-display"></span></div>
+                <div>Фаза: <span id="game-phase"></span></div>
+                <div>День: <span id="game-day"></span></div>
+            </div>
+            
+            <div class="players-list" id="players-list"></div>
+            
+            <div class="action-panel" id="action-panel"></div>
+            
+            <div class="chat">
+                <div id="chat-messages"></div>
+                <input type="text" id="chat-input" placeholder="Сообщение">
+                <button id="send-message-btn">Отправить</button>
+            </div>
+        </div>
+    </div>
+    
+    <script src="/game.js"></script>
+</body>
+</html>
