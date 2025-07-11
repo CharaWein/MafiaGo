@@ -1,0 +1,8 @@
+services:
+  - type: web
+    name: mafiago
+    env: go
+    plan: free
+    buildCommand: go build -o mafia
+    startCommand: ./mafia
+    healthCheckPath: /

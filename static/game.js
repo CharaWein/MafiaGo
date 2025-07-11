@@ -64,10 +64,14 @@ class MafiaGame {
     }
     
     connectWebSocket() {
-        this.socket = new WebSocket(`ws://${window.location.host}/ws/${this.gameId}?player=${this.playerName}`);
+        // Заменяем ws:// на wss://
+        const protocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
+        const wsUrl = `${protocol}${window.location.host}/ws/${this.gameId}?player=${encodeURIComponent(this.playerName)}`;
+        
+        this.socket = new WebSocket(wsUrl);
         
         this.socket.onopen = () => {
-            this.showMessage('WebSocket соединение установлено');
+            this.showMessage('Соединение установлено');
         };
         
         this.socket.onmessage = (event) => {

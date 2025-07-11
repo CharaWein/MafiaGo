@@ -34,7 +34,11 @@ func main() {
 		http.ServeFile(w, r, filepath.Join(staticDir, "favicon.ico"))
 	})
 
-	log.Println("Server starting on :8080")
-	log.Println("Static files directory:", staticDir)
-	log.Fatal(http.ListenAndServe(":8080", r))
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+
+	log.Printf("Server starting on :%s", port)
+	log.Fatal(http.ListenAndServe(":"+port, r))
 }
