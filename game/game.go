@@ -112,31 +112,6 @@ func (g *Game) getMafiaTarget() string {
 	return target
 }
 
-func (g *Game) processDayVotes() {
-	voteCount := make(map[string]int)
-	for _, target := range g.Votes {
-		if target != "" {
-			voteCount[target]++
-		}
-	}
-
-	maxVotes := 0
-	var toKill string
-	for target, count := range voteCount {
-		if count > maxVotes {
-			maxVotes = count
-			toKill = target
-		} else if count == maxVotes {
-			toKill = ""
-		}
-	}
-
-	if toKill != "" && maxVotes > g.getAliveCount()/2 {
-		g.Players[toKill].Alive = false
-	}
-	g.Votes = make(map[string]string)
-}
-
 func (g *Game) SetNightAction(playerID, targetID string) {
 	g.Mu.Lock()
 	defer g.Mu.Unlock()
@@ -293,7 +268,7 @@ func (g *Game) Start() {
 	g.Phase = "night"
 	g.DayNumber = 1
 
-	// Отправляем игрокам их роли
+	// Отправляем роли всем игрокам
 	for _, p := range g.Players {
 		if p.Conn != nil {
 			p.Conn.WriteJSON(Message{
@@ -303,5 +278,125 @@ func (g *Game) Start() {
 				},
 			})
 		}
+	}
+
+	// Запускаем ночную фазу
+	g.startNightPhase()
+}
+
+func (g *Game) startNightPhase() {
+	// Отправляем уведомление о начале ночи
+	msg := Message{
+		Type: "night_start",
+		Payload: map[string]interface{}{
+			"number": g.DayNumber,
+		},
+	}
+	g.Broadcast(msg)
+
+	// Через 1 минуту автоматически завершаем ночь
+	time.AfterFunc(1*time.Minute, func() {
+		g.endNightPhase()
+	})
+}
+
+func (g *Game) endNightPhase() {
+	g.Mu.Lock()
+	defer g.Mu.Unlock()
+
+	// Обрабатываем ночные действия
+	target := g.getMafiaTarget()
+	if target != "" {
+		g.Players[target].Alive = false
+	}
+
+	// Переходим к дневной фазе
+	g.Phase = "day"
+	g.NightActions = make(map[string]string)
+
+	// Отправляем уведомление о начале дня
+	msg := Message{
+		Type: "day_start",
+		Payload: map[string]interface{}{
+			"number": g.DayNumber,
+			"killed": target,
+		},
+	}
+	g.Broadcast(msg)
+
+	// Через 2 минуты автоматически завершаем день
+	time.AfterFunc(2*time.Minute, func() {
+		g.endDayPhase()
+	})
+}
+
+func (g *Game) endDayPhase() {
+	g.Mu.Lock()
+	defer g.Mu.Unlock()
+
+	// Обрабатываем дневные голоса
+	g.processDayVotes()
+
+	// Проверяем условие окончания игры
+	if g.checkGameEnd() {
+		msg := Message{
+			Type: "game_end",
+			Payload: map[string]interface{}{
+				"winner": g.Winner,
+			},
+		}
+		g.Broadcast(msg)
+		return
+	}
+
+	// Переходим к следующей ночи
+	g.DayNumber++
+	g.Phase = "night"
+	g.Votes = make(map[string]string)
+
+	// Отправляем уведомление о начале ночи
+	msg := Message{
+		Type: "night_start",
+		Payload: map[string]interface{}{
+			"number": g.DayNumber,
+		},
+	}
+	g.Broadcast(msg)
+
+	// Через 1 минуту автоматически завершаем ночь
+	time.AfterFunc(1*time.Minute, func() {
+		g.endNightPhase()
+	})
+}
+
+func (g *Game) processDayVotes() {
+	voteCount := make(map[string]int)
+	for _, target := range g.Votes {
+		if target != "" {
+			voteCount[target]++
+		}
+	}
+
+	maxVotes := 0
+	var toKill string
+	for target, count := range voteCount {
+		if count > maxVotes {
+			maxVotes = count
+			toKill = target
+		} else if count == maxVotes {
+			toKill = "" // Ничья - никто не умирает
+		}
+	}
+
+	// Игрок погибает, если за него проголосовало больше половины живых игроков
+	if toKill != "" && maxVotes > g.getAliveCount()/2 {
+		g.Players[toKill].Alive = false
+		g.Broadcast(Message{
+			Type: "player_killed",
+			Payload: map[string]interface{}{
+				"player_id": toKill,
+				"day":       g.DayNumber,
+			},
+		})
 	}
 }

@@ -169,3 +169,16 @@ button {
 #start-game-btn:hover {
     background-color: #45a049;
 }
+
+#mafia-panel, #sheriff-panel {
+    background-color: #f8f9fa;
+    padding: 15px;
+    margin: 10px 0;
+    border-radius: 5px;
+    border: 1px solid #ddd;
+}
+
+#action-panel button {
+    margin: 5px;
+    padding: 8px 15px;
+}

@@ -57,9 +57,22 @@ class MafiaGame {
 
     handleRoleAssignment(role) {
         this.role = role;
-        document.getElementById('role-name').textContent = this.getRoleName(role);
-        document.getElementById('role-description').textContent = this.getRoleDescription(role);
+        const roleNames = {
+            'don': 'Дон мафии',
+            'mafia': 'Мафия',
+            'sheriff': 'Шериф',
+            'civilian': 'Мирный житель'
+        };
+        
+        document.getElementById('role-name').textContent = roleNames[role] || role;
         document.getElementById('role-info').classList.remove('hidden');
+        
+        // Показываем соответствующую панель действий
+        if (role === 'don' || role === 'mafia') {
+            document.getElementById('mafia-panel').classList.remove('hidden');
+        } else if (role === 'sheriff') {
+            document.getElementById('sheriff-panel').classList.remove('hidden');
+        }
     }
 
     getRoleName(role) {
@@ -160,8 +173,25 @@ class MafiaGame {
             }
         };
 
-        this.socket.onerror = (error) => {
-            console.error('WebSocket ошибка:', error);
+        this.socket.onmessage = (event) => {
+            const msg = JSON.parse(event.data);
+            console.log('Получено сообщение:', msg);
+            
+            switch(msg.type) {
+                case 'night_start':
+                    this.showNightInterface();
+                    break;
+                case 'day_start':
+                    this.showDayInterface(msg.payload.killed);
+                    break;
+                case 'player_killed':
+                    this.showKilledPlayer(msg.payload);
+                    break;
+                case 'game_end':
+                    this.showGameEnd(msg.payload.winner);
+                    break;
+                // ... остальные обработчики ...
+            }
         };
     }
     
@@ -169,6 +199,10 @@ class MafiaGame {
         document.getElementById('game-phase').textContent = state.phase === 'night' ? 'Ночь' : 'День';
         document.getElementById('game-day').textContent = state.day_number;
         
+        if (state.phase !== 'lobby') {
+            document.getElementById('start-game-btn').classList.add('hidden');
+        }
+
         const playersList = document.getElementById('players-list');
         playersList.innerHTML = '';
         
@@ -280,6 +314,30 @@ class MafiaGame {
                 payload: ready
             }));
         }
+    }
+
+    showNightInterface() {
+        document.getElementById('game-phase').textContent = 'Ночь';
+        // Показываем соответствующие действия для роли
+        if (this.role === 'mafia' || this.role === 'don') {
+            this.showMafiaActions();
+        } else if (this.role === 'sheriff') {
+            this.showSheriffActions();
+        }
+    }
+
+    showDayInterface(killedPlayerId) {
+        document.getElementById('game-phase').textContent = 'День';
+        if (killedPlayerId) {
+            this.showMessage(`Ночью был убит игрок ${this.getPlayerName(killedPlayerId)}`);
+        }
+        this.showVotingInterface();
+    }
+
+    showGameEnd(winner) {
+        const winnerText = winner === 'mafia' ? 'Мафия победила!' : 'Мирные жители победили!';
+        document.getElementById('winner-message').textContent = winnerText;
+        document.getElementById('game-end').classList.remove('hidden');
     }
 }
 

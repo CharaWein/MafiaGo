@@ -65,6 +65,18 @@
                 <button onclick="game.sendChatMessage()">Отправить</button>
             </div>
         </div>
+
+        <div id="mafia-panel" class="hidden">
+            <h3>Ночное действие мафии</h3>
+            <div id="mafia-targets"></div>
+            <button id="mafia-kill-btn">Выбрать цель</button>
+        </div>
+
+        <div id="sheriff-panel" class="hidden">
+            <h3>Проверка игрока</h3>
+            <div id="sheriff-targets"></div>
+            <button id="sheriff-check-btn">Проверить</button>
+        </div>
     </div>
     
     <script src="/game.js"></script>
