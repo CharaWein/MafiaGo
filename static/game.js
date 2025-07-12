@@ -5,13 +5,96 @@ class MafiaGame {
         this.playerName = null;
         this.isHost = false;
         this.players = [];
-        this.readyStatus = false;
-        this.playerReady = false; // Текущее состояние готовности
-        
-        document.getElementById('ready-btn').addEventListener('click', () => this.toggleReady());
+        this.playerReady = false;
         
         this.initEventListeners();
-        this.initReadyButton();
+        console.log("Game initialized"); // Добавим лог инициализации
+    }
+
+    initEventListeners() {
+        document.getElementById('create-game-btn').addEventListener('click', () => this.createGame());
+        document.getElementById('join-game-btn').addEventListener('click', () => this.joinGame());
+        
+        const readyBtn = document.getElementById('ready-btn');
+        readyBtn.addEventListener('click', () => this.toggleReady());
+        
+        const startBtn = document.getElementById('start-game-btn');
+        if (startBtn) {
+            startBtn.addEventListener('click', () => this.startGame());
+        }
+    }
+
+    connectWebSocket() {
+        const protocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
+        const wsUrl = `${protocol}${window.location.host}/ws?game_id=${this.gameId}&name=${encodeURIComponent(this.playerName)}`;
+        
+        this.socket = new WebSocket(wsUrl);
+
+        this.socket.onopen = () => {
+            console.log('WebSocket connection established');
+        };
+
+        this.socket.onmessage = (event) => {
+            const msg = JSON.parse(event.data);
+            console.log('WebSocket message:', msg);
+            
+            switch(msg.type) {
+                case 'players_update':
+                    this.updatePlayersList(msg.payload.players);
+                    this.updateStartButton(msg.payload.canStart);
+                    break;
+                case 'host_status':
+                    this.isHost = msg.payload.isHost;
+                    if (this.isHost) {
+                        document.getElementById('start-game-btn').classList.remove('hidden');
+                    }
+                    break;
+                case 'game_started':
+                    this.showGameScreen();
+                    break;
+            }
+        };
+    }
+
+    updatePlayersList(players) {
+        console.log("Updating players list with:", players);
+        this.players = players;
+        const listElement = document.getElementById('players-list');
+        if (!listElement) {
+            console.error("Players list element not found!");
+            return;
+        }
+        
+        listElement.innerHTML = '';
+        
+        players.forEach(player => {
+            const playerElement = document.createElement('div');
+            playerElement.className = `player ${player.ready ? 'ready' : ''}`;
+            playerElement.innerHTML = `
+                <span class="player-name">${player.name}</span>
+                <span class="player-status">
+                    ${player.ready ? '✓ Готов' : 'Не готов'}
+                </span>
+            `;
+            listElement.appendChild(playerElement);
+        });
+    }
+
+    toggleReady() {
+        if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
+            console.error("WebSocket is not connected");
+            return;
+        }
+
+        this.playerReady = !this.playerReady;
+        const readyBtn = document.getElementById('ready-btn');
+        readyBtn.textContent = this.playerReady ? '✓ Готов' : 'Готов';
+        readyBtn.classList.toggle('ready', this.playerReady);
+        
+        this.socket.send(JSON.stringify({
+            type: 'set_ready',
+            ready: this.playerReady
+        }));
     }
     
     initEventListeners() {

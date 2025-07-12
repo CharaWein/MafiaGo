@@ -552,4 +552,5 @@ func (g *Game) BroadcastPlayersUpdate() {
 	}
 
 	g.Broadcast(msg)
+	log.Printf("Broadcasting players update: %+v", msg) // Добавляем лог
 }
