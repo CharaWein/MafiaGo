@@ -519,6 +519,10 @@ func (g *Game) SetReadyStatus(playerID string, ready bool) {
 	defer g.Mu.Unlock()
 
 	if player, exists := g.Players[playerID]; exists {
+		log.Printf("Changing ready status for %s from %v to %v",
+			player.Name, player.Ready, ready)
 		player.Ready = ready
+	} else {
+		log.Printf("Player %s not found for ready status update", playerID)
 	}
 }

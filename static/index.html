@@ -43,5 +43,19 @@
     </div>
     
     <script src="/game.js"></script>
+<script>
+// Временный код для отладки
+function debugWebSocket() {
+    if (!window.game || !window.game.socket) {
+        console.log("Game not initialized");
+        return;
+    }
+    
+    console.log("WebSocket state:", window.game.socket.readyState);
+    console.log("Current players:", window.game.players);
+    console.log("My ready status:", window.game.playerReady);
+}
+setInterval(debugWebSocket, 5000);
+</script>
 </body>
 </html>

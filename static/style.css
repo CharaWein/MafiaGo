@@ -97,3 +97,27 @@ button {
     opacity: 0.5;
     cursor: not-allowed;
 }
+
+#ready-btn {
+    transition: all 0.3s ease;
+    padding: 10px 20px;
+    font-size: 16px;
+}
+
+#ready-btn.active {
+    background-color: #4CAF50;
+    color: white;
+    box-shadow: 0 0 10px rgba(76, 175, 80, 0.5);
+}
+
+.player.ready {
+    background-color: #e8f5e9;
+    border-left: 4px solid #4CAF50;
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0% { opacity: 1; }
+    50% { opacity: 0.8; }
+    100% { opacity: 1; }
+}

@@ -6,6 +6,9 @@ class MafiaGame {
         this.isHost = false;
         this.players = [];
         this.readyStatus = false;
+        this.playerReady = false; // Текущее состояние готовности
+        
+        document.getElementById('ready-btn').addEventListener('click', () => this.toggleReady());
         
         this.initEventListeners();
     }
@@ -98,34 +101,38 @@ class MafiaGame {
     }
 
     toggleReady() {
-        if (!this.socket) return;
-        
-        this.readyStatus = !this.readyStatus;
+        if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
+            console.error("WebSocket is not connected");
+            return;
+        }
+
+        this.playerReady = !this.playerReady;
         const readyBtn = document.getElementById('ready-btn');
         
         // Визуальное обновление
-        readyBtn.textContent = this.readyStatus ? '✓ Готов' : 'Готов';
-        readyBtn.className = this.readyStatus ? 'ready' : '';
+        readyBtn.textContent = this.playerReady ? '✓ Готов' : 'Готов';
+        readyBtn.classList.toggle('active', this.playerReady);
         
-        // Отправка на сервер
-        this.socket.send(JSON.stringify({
+        // Отправка состояния на сервер
+        const message = {
             type: 'set_ready',
-            ready: this.readyStatus
-        }));
+            ready: this.playerReady
+        };
         
-        console.log('Sent ready status:', this.readyStatus);
+        console.log("Sending ready status:", message);
+        this.socket.send(JSON.stringify(message));
+
     }
 
     updatePlayersList(players) {
-        console.log('Updating players list:', players);
+        console.log("Received players list:", players);
+        this.players = players;
         const listElement = document.getElementById('players-list');
         listElement.innerHTML = '';
         
         players.forEach(player => {
             const playerElement = document.createElement('div');
             playerElement.className = `player ${player.ready ? 'ready' : ''}`;
-            
-            // Добавляем ID игрока в данные элемента
             playerElement.dataset.playerId = player.id;
             
             playerElement.innerHTML = `
