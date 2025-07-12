@@ -6,6 +6,12 @@ class MafiaGame {
         this.isHost = false;
         this.players = [];
         this.playerReady = false;
+
+        console.log("Game instance created"); // Добавляем лог создания
+    
+        // Проверяем элементы DOM
+        console.log("Ready button exists:", !!document.getElementById('ready-btn'));
+        console.log("Players list exists:", !!document.getElementById('players-list'));
         
         this.initEventListeners();
         console.log("Game initialized"); // Добавим лог инициализации
@@ -28,30 +34,45 @@ class MafiaGame {
         const protocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
         const wsUrl = `${protocol}${window.location.host}/ws?game_id=${this.gameId}&name=${encodeURIComponent(this.playerName)}`;
         
+        console.log("Connecting to WebSocket:", wsUrl); // Лог URL подключения
+        
         this.socket = new WebSocket(wsUrl);
 
         this.socket.onopen = () => {
             console.log('WebSocket connection established');
+            this.socket.send(JSON.stringify({
+                type: 'get_players' // Запрашиваем текущий список игроков
+            }));
+        };
+
+        this.socket.onerror = (error) => {
+            console.error('WebSocket error:', error);
         };
 
         this.socket.onmessage = (event) => {
-            const msg = JSON.parse(event.data);
-            console.log('WebSocket message:', msg);
-            
-            switch(msg.type) {
-                case 'players_update':
-                    this.updatePlayersList(msg.payload.players);
-                    this.updateStartButton(msg.payload.canStart);
-                    break;
-                case 'host_status':
-                    this.isHost = msg.payload.isHost;
-                    if (this.isHost) {
-                        document.getElementById('start-game-btn').classList.remove('hidden');
-                    }
-                    break;
-                case 'game_started':
-                    this.showGameScreen();
-                    break;
+            console.log('Raw WebSocket message:', event.data);
+            try {
+                const msg = JSON.parse(event.data);
+                console.log('Parsed WebSocket message:', msg);
+                
+                switch(msg.type) {
+                    case 'players_update':
+                        console.log('Received players update:', msg.payload);
+                        this.updatePlayersList(msg.payload.players);
+                        this.updateStartButton(msg.payload.canStart);
+                        break;
+                    case 'host_status':
+                        console.log('Host status:', msg.payload.isHost);
+                        this.isHost = msg.payload.isHost;
+                        if (this.isHost) {
+                            document.getElementById('start-game-btn').classList.remove('hidden');
+                        }
+                        break;
+                    default:
+                        console.log('Unknown message type:', msg.type);
+                }
+            } catch (e) {
+                console.error('Error parsing WebSocket message:', e);
             }
         };
     }
@@ -81,20 +102,29 @@ class MafiaGame {
     }
 
     toggleReady() {
-        if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
-            console.error("WebSocket is not connected");
+        console.log("Toggle ready called");
+        if (!this.socket) {
+            console.error("WebSocket is not initialized");
             return;
         }
-
+        
+        if (this.socket.readyState !== WebSocket.OPEN) {
+            console.error("WebSocket is not in OPEN state. Current state:", this.socket.readyState);
+            return;
+        }
+        
         this.playerReady = !this.playerReady;
         const readyBtn = document.getElementById('ready-btn');
         readyBtn.textContent = this.playerReady ? '✓ Готов' : 'Готов';
-        readyBtn.classList.toggle('ready', this.playerReady);
+        readyBtn.className = this.playerReady ? 'ready' : '';
         
-        this.socket.send(JSON.stringify({
+        const message = {
             type: 'set_ready',
             ready: this.playerReady
-        }));
+        };
+        
+        console.log("Sending ready status:", message);
+        this.socket.send(JSON.stringify(message));
     }
     
     initEventListeners() {

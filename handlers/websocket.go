@@ -77,4 +77,69 @@ func (h *Handler) WebSocketHandler(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+
+	for {
+		var msg struct {
+			Type    string      `json:"type"`
+			Payload interface{} `json:"payload"`
+		}
+
+		if err := conn.ReadJSON(&msg); err != nil {
+			log.Printf("Read error: %v", err)
+			break
+		}
+
+		log.Printf("Received message: %+v", msg)
+
+		switch msg.Type {
+		case "set_ready":
+			if ready, ok := msg.Payload.(bool); ok {
+				log.Printf("Setting ready status for %s to %v", player.Name, ready)
+				player.Ready = ready
+
+				// Формируем ответ
+				players := make([]game.PlayerInfo, 0, len(gameInstance.Players))
+				for _, p := range gameInstance.Players {
+					players = append(players, game.PlayerInfo{
+						ID:    p.ID,
+						Name:  p.Name,
+						Ready: p.Ready,
+					})
+				}
+
+				response := map[string]interface{}{
+					"type": "players_update",
+					"payload": map[string]interface{}{
+						"players":  players,
+						"canStart": gameInstance.CanStartGame(),
+					},
+				}
+
+				// Отправляем всем
+				for _, p := range gameInstance.Players {
+					if p.Conn != nil {
+						p.Conn.WriteJSON(response)
+					}
+				}
+			}
+		case "get_players":
+			// Отправляем текущий список игроков
+			players := make([]game.PlayerInfo, 0, len(gameInstance.Players))
+			for _, p := range gameInstance.Players {
+				players = append(players, game.PlayerInfo{
+					ID:    p.ID,
+					Name:  p.Name,
+					Ready: p.Ready,
+				})
+			}
+
+			conn.WriteJSON(map[string]interface{}{
+				"type": "players_update",
+				"payload": map[string]interface{}{
+					"players":  players,
+					"canStart": gameInstance.CanStartGame(),
+				},
+			})
+		}
+	}
 }
