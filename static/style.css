@@ -47,21 +47,31 @@ button {
 }
 
 .player {
-    padding: 8px;
+    padding: 10px;
     margin: 5px 0;
+    background: #f5f5f5;
+    border-radius: 4px;
     display: flex;
     justify-content: space-between;
 }
 
 .player.ready {
-    background-color: #e8f5e9;
+    background: #e8f5e9;
+}
+
+.player-name {
+    font-weight: bold;
+}
+
+.player-status {
+    color: #666;
 }
 
 .host-only {
     display: none;
 }
 
-.game-id-display {
-    margin: 10px 0;
-    font-weight: bold;
+#start-game-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
 }

@@ -75,25 +75,29 @@ class MafiaGame {
         this.socket = new WebSocket(wsUrl);
 
         this.socket.onopen = () => {
-            console.log('Соединение установлено');
+            console.log('WebSocket connection established');
         };
 
         this.socket.onmessage = (event) => {
             const msg = JSON.parse(event.data);
-            console.log('Получено:', msg);
+            console.log('Message received:', msg);
             
             switch(msg.type) {
+                case 'lobby_state':
+                    this.updatePlayersList(msg.payload.players);
+                    this.updateStartButton(msg.payload.canStart);
+                    break;
                 case 'players_update':
-                    this.updatePlayersList(msg.players);
+                    this.updatePlayersList(msg.payload.players);
                     break;
                 case 'host_status':
-                    this.isHost = msg.isHost;
+                    this.isHost = msg.payload.isHost;
                     if (this.isHost) {
                         document.getElementById('start-game-btn').classList.remove('hidden');
                     }
                     break;
                 case 'game_started':
-                    this.startGame();
+                    this.showGameScreen();
                     break;
             }
         };
@@ -115,12 +119,19 @@ class MafiaGame {
         });
     }
 
+    updateStartButton(canStart) {
+        const startBtn = document.getElementById('start-game-btn');
+        if (this.isHost) {
+            startBtn.disabled = !canStart;
+        }
+    }
+
     toggleReady() {
         if (this.socket) {
             const isReady = document.getElementById('ready-btn').textContent.includes('✓');
             this.socket.send(JSON.stringify({
                 type: 'set_ready',
-                ready: !isReady
+                payload: !isReady
             }));
             
             document.getElementById('ready-btn').textContent = 
@@ -134,7 +145,9 @@ class MafiaGame {
                 type: 'start_game'
             }));
         }
-        // Переход к игровому экрану
+    }
+
+    showGameScreen() {
         document.getElementById('lobby-screen').classList.add('hidden');
         document.getElementById('game-screen').classList.remove('hidden');
     }
