@@ -73,3 +73,20 @@ func (h *Handler) GetGameState(w http.ResponseWriter, r *http.Request) {
 	state := game.GetGameState()
 	json.NewEncoder(w).Encode(state)
 }
+
+func (h *Handler) GetLobbyState(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	gameID := vars["gameID"]
+
+	gamesMutex.Lock()
+	game, exists := games[gameID]
+	gamesMutex.Unlock()
+
+	if !exists {
+		http.Error(w, "Game not found", http.StatusNotFound)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(game.GetLobbyState())
+}

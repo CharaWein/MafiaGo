@@ -36,6 +36,11 @@ type Game struct {
 	readyPlayers int
 }
 
+type LobbyState struct {
+	Players  []PlayerInfo `json:"players"`
+	CanStart bool         `json:"canStart"`
+}
+
 func NewGame() *Game {
 	return &Game{
 		ID:           generateGameID(),
@@ -398,5 +403,24 @@ func (g *Game) processDayVotes() {
 				"day":       g.DayNumber,
 			},
 		})
+	}
+}
+
+func (g *Game) GetLobbyState() LobbyState {
+	g.Mu.Lock()
+	defer g.Mu.Unlock()
+
+	var players []PlayerInfo
+	for _, p := range g.Players {
+		players = append(players, PlayerInfo{
+			ID:    p.ID,
+			Name:  p.Name,
+			Ready: p.Ready,
+		})
+	}
+
+	return LobbyState{
+		Players:  players,
+		CanStart: len(players) >= 4 && g.readyPlayers == len(players),
 	}
 }

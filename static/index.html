@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Онлайн Мафия</title>
     <link rel="stylesheet" href="/style.css">
-    <link rel="icon" href="/favicon.ico" type="image/x-icon">
 </head>
 <body>
     <div class="container">
@@ -18,64 +17,55 @@
                 <input type="text" id="player-name-input" placeholder="Ваше имя">
                 <button id="join-game-btn">Присоединиться</button>
             </div>
-        </div>
-
-        <div id="lobby-controls">
-            <button id="start-game-btn" class="visible">Начать игру</button>
+            
+            <div id="lobby-players-container">
+                <h3>Игроки в лобби:</h3>
+                <div id="lobby-players"></div>
+                <button id="ready-btn">Я готов</button>
+            </div>
+            
+            <button id="start-game-btn" class="hidden" disabled>Начать игру</button>
         </div>
         
-        <div id="game-screen" style="display: none;">
+        <div id="game-screen" class="hidden">
             <div class="game-info">
                 <div>ID игры: <span id="game-id-display"></span></div>
                 <div>Фаза: <span id="game-phase">Лобби</span></div>
                 <div>День: <span id="game-day">0</span></div>
             </div>
             
-            <div class="players-list" id="players-list"></div>
+            <div id="game-message" class="hidden"></div>
             
-            <div class="action-panel" id="action-panel"></div>
-            
-            <div class="chat">
-                <div id="chat-messages"></div>
-                <input type="text" id="chat-input" placeholder="Сообщение">
-                <button id="send-message-btn">Отправить</button>
-            </div>
-
             <div id="role-info" class="hidden">
                 <h2>Ваша роль: <span id="role-name"></span></h2>
                 <p id="role-description"></p>
             </div>
             
-            <div id="action-panel" class="hidden">
-                <h3 id="action-title"></h3>
-                <div id="players-to-select"></div>
-                <button id="confirm-action">Подтвердить</button>
+            <div class="players-list" id="players-list"></div>
+            
+            <div id="mafia-panel" class="hidden">
+                <h3>Ночное действие мафии</h3>
+                <p>Выберите игрока для убийства</p>
+            </div>
+            
+            <div id="sheriff-panel" class="hidden">
+                <h3>Проверка игрока</h3>
+                <p>Выберите игрока для проверки</p>
+            </div>
+            
+            <div class="chat-container">
+                <div id="chat-messages"></div>
+                <div class="chat-controls">
+                    <input type="text" id="chat-input" placeholder="Введите сообщение...">
+                    <button id="send-message-btn">Отправить</button>
+                </div>
             </div>
             
             <div id="game-end" class="hidden">
                 <h2>Игра окончена!</h2>
                 <p id="winner-message"></p>
+                <button onclick="location.reload()">Новая игра</button>
             </div>
-        </div>
-
-        <div class="chat-container">
-            <div id="chat-messages"></div>
-            <div class="chat-controls">
-                <input type="text" id="chat-input" placeholder="Введите сообщение...">
-                <button onclick="game.sendChatMessage()">Отправить</button>
-            </div>
-        </div>
-
-        <div id="mafia-panel" class="hidden">
-            <h3>Ночное действие мафии</h3>
-            <div id="mafia-targets"></div>
-            <button id="mafia-kill-btn">Выбрать цель</button>
-        </div>
-
-        <div id="sheriff-panel" class="hidden">
-            <h3>Проверка игрока</h3>
-            <div id="sheriff-targets"></div>
-            <button id="sheriff-check-btn">Проверить</button>
         </div>
     </div>
     

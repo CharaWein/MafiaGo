@@ -16,6 +16,7 @@ func main() {
 	r.HandleFunc("/join/{gameID}", h.JoinGame).Methods("POST")
 	r.HandleFunc("/state/{gameID}", h.GetGameState).Methods("GET")
 	r.HandleFunc("/ws", h.WebSocketHandler)
+	r.HandleFunc("/lobby/{gameID}", h.GetLobbyState).Methods("GET")
 
 	// Static files
 	r.PathPrefix("/").Handler(http.FileServer(http.Dir("./static")))

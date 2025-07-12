@@ -5,13 +5,8 @@ class MafiaGame {
         this.playerId = null;
         this.playerName = null;
         this.isHost = false;
-        document.getElementById('start-game-btn').addEventListener('click', () => this.startGame());
-        
-        // Убедимся, что кнопка существует перед добавлением обработчика
-        const startBtn = document.getElementById('start-game-btn');
-        if (startBtn) {
-            startBtn.addEventListener('click', () => this.startGame());
-        }
+        this.role = null;
+        this.lobbyUpdateInterval = null;
         
         this.initEventListeners();
     }
@@ -20,52 +15,147 @@ class MafiaGame {
         document.getElementById('create-game-btn').addEventListener('click', () => this.createGame());
         document.getElementById('join-game-btn').addEventListener('click', () => this.joinGame());
         document.getElementById('send-message-btn').addEventListener('click', () => this.sendChatMessage());
-    }
-
-    handleGameMessage(message) {
-        switch(msg.type) {
-            case 'host_status':
-                this.isHost = msg.payload.is_host;
-                if (this.isHost) {
-                    document.getElementById('start-game-btn').classList.remove('hidden');
-                }
-                break;
-            case 'role_assigned':
-                this.handleRoleAssignment(msg.role);
-                break;
-            case 'game_started':
-                this.showGameInterface();
-                break;
-            case 'game_state':
-                this.updateGameState(msg.payload);
-                break;
-            case 'chat_message':
-                this.addChatMessage(msg.payload);
-                break;
-            default:
-                console.log('Неизвестный тип сообщения:', msg);
+        document.getElementById('ready-btn').addEventListener('click', () => this.toggleReady());
+        
+        const startBtn = document.getElementById('start-game-btn');
+        if (startBtn) {
+            startBtn.addEventListener('click', () => this.startGame());
         }
     }
 
-    startGame() {
-        if (this.socket && this.isHost) {
-            this.socket.send(JSON.stringify({
-                type: 'start_game'
-            }));
+    async createGame() {
+        try {
+            const response = await fetch('/create', { method: 'POST' });
+            const data = await response.json();
+            
+            this.gameId = data.game_id;
+            document.getElementById('game-id-display').textContent = this.gameId;
+            document.getElementById('game-id-input').value = this.gameId;
+            this.showMessage(`Игра создана! ID: ${this.gameId}`);
+        } catch (error) {
+            this.showMessage(`Ошибка при создании игры: ${error}`);
         }
+    }
+    
+    async joinGame() {
+        this.gameId = document.getElementById('game-id-input').value.trim();
+        this.playerName = document.getElementById('player-name-input').value.trim();
+        
+        if (!this.gameId || !this.playerName) {
+            this.showMessage('Введите ID игры и ваше имя');
+            return;
+        }
+        
+        try {
+            const response = await fetch(`/join/${this.gameId}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ player_name: this.playerName })
+            });
+            
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(errorText || 'Ошибка при присоединении к игре');
+            }
+            
+            this.connectWebSocket();
+            document.getElementById('lobby-screen').classList.add('hidden');
+            document.getElementById('game-screen').classList.remove('hidden');
+            this.showMessage(`Вы присоединились к игре как ${this.playerName}`);
+            
+            this.startLobbyUpdates();
+        } catch (error) {
+            this.showMessage(`Ошибка: ${error.message}`);
+            console.error('Join game error:', error);
+        }
+    }
+
+    connectWebSocket() {
+        const protocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
+        const wsUrl = `${protocol}${window.location.host}/ws?game_id=${this.gameId}&name=${encodeURIComponent(this.playerName)}`;
+        
+        this.socket = new WebSocket(wsUrl);
+
+        this.socket.onopen = () => {
+            console.log('WebSocket соединение установлено');
+        };
+
+        this.socket.onclose = () => {
+            this.showMessage('Соединение с сервером потеряно');
+        };
+
+        this.socket.onmessage = (event) => {
+            const msg = JSON.parse(event.data);
+            console.log('Получено сообщение:', msg);
+            
+            switch(msg.type) {
+                case 'host_status':
+                    this.isHost = msg.payload.is_host;
+                    if (this.isHost) {
+                        document.getElementById('start-game-btn').classList.remove('hidden');
+                    }
+                    break;
+                case 'game_state':
+                    this.updateGameState(msg.payload);
+                    break;
+                case 'role_assigned':
+                    this.handleRoleAssignment(msg.payload.role);
+                    break;
+                case 'night_start':
+                    this.showNightInterface();
+                    break;
+                case 'day_start':
+                    this.showDayInterface(msg.payload.killed);
+                    break;
+                case 'player_killed':
+                    this.showKilledPlayer(msg.payload);
+                    break;
+                case 'game_end':
+                    this.showGameEnd(msg.payload.winner);
+                    break;
+                case 'chat_message':
+                    this.addChatMessage(msg.payload);
+                    break;
+                default:
+                    console.log('Неизвестный тип сообщения:', msg);
+            }
+        };
+    }
+
+    updateGameState(state) {
+        document.getElementById('game-phase').textContent = state.phase === 'night' ? 'Ночь' : 'День';
+        document.getElementById('game-day').textContent = state.day_number;
+        
+        const playersList = document.getElementById('players-list');
+        playersList.innerHTML = '';
+        
+        state.players.forEach(player => {
+            const playerCard = document.createElement('div');
+            playerCard.className = 'player-card';
+            playerCard.innerHTML = `
+                <div class="player-name">${player.name}</div>
+                <div class="player-status">${player.alive ? 'Жив' : 'Мертв'}</div>
+                ${player.role && !player.alive ? `<div class="player-role">${this.getRoleName(player.role)}</div>` : ''}
+            `;
+            
+            if (player.alive) {
+                playerCard.dataset.playerId = player.id;
+                playerCard.addEventListener('click', () => this.handlePlayerSelection(player.id));
+            }
+            
+            playersList.appendChild(playerCard);
+        });
     }
 
     handleRoleAssignment(role) {
         this.role = role;
-        const roleNames = {
-            'don': 'Дон мафии',
-            'mafia': 'Мафия',
-            'sheriff': 'Шериф',
-            'civilian': 'Мирный житель'
-        };
+        const roleInfo = document.getElementById('role-info');
+        roleInfo.querySelector('#role-name').textContent = this.getRoleName(role);
+        roleInfo.classList.remove('hidden');
         
-        document.getElementById('role-name').textContent = roleNames[role] || role;
-        document.getElementById('role-info').classList.remove('hidden');
+        // Скрываем все панели действий
+        document.getElementById('mafia-panel').classList.add('hidden');
+        document.getElementById('sheriff-panel').classList.add('hidden');
         
         // Показываем соответствующую панель действий
         if (role === 'don' || role === 'mafia') {
@@ -84,143 +174,67 @@ class MafiaGame {
         };
         return roleNames[role] || role;
     }
-    
-    async createGame() {
-        try {
-            const response = await fetch('/create', { method: 'POST' });
-            const data = await response.json();
-            
-            this.gameId = data.game_id;
-            document.getElementById('game-id-display').textContent = this.gameId;
-            this.showMessage(`Игра создана! ID: ${this.gameId}`);
-            
-            // Переходим к экрану ввода имени
-            document.getElementById('game-id-input').value = this.gameId;
-        } catch (error) {
-            this.showMessage(`Ошибка при создании игры: ${error}`);
-        }
-    }
-    
-    async joinGame() {
-        this.gameId = document.getElementById('game-id-input').value.trim();
-        this.playerName = document.getElementById('player-name-input').value.trim();
-        
-        if (!this.gameId || !this.playerName) {
-            this.showMessage('Введите ID игры и ваше имя');
-            return;
-        }
-        
-        try {
-            const response = await fetch(`/join/${this.gameId}`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ player_name: this.playerName })
-            });
-            
-            // Проверяем статус ответа
-            if (!response.ok) {
-                const errorText = await response.text();
-                throw new Error(errorText || 'Ошибка при присоединении к игре');
-            }
-            
-            // Пытаемся распарсить JSON только если ответ не пустой
-            let data = {};
-            if (response.status !== 204) { // 204 - No Content
-                data = await response.json();
-            }
-            
-            this.connectWebSocket();
-            document.getElementById('lobby-screen').style.display = 'none';
-            document.getElementById('game-screen').style.display = 'block';
-            this.showMessage(`Вы присоединились к игре как ${this.playerName}`);
-        } catch (error) {
-            this.showMessage(`Ошибка: ${error.message}`);
-            console.error('Join game error:', error);
-        }
-    }
-    
-    connectWebSocket() {
-        const protocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
-        const wsUrl = `${protocol}${window.location.host}/ws?game_id=${this.gameId}&name=${encodeURIComponent(this.playerName)}`;
-        
-        this.socket = new WebSocket(wsUrl);
 
-        this.socket.onopen = () => {
-            console.log('WebSocket соединение установлено');
-        };
-
-        this.socket.onmessage = (event) => {
-            const msg = JSON.parse(event.data);
-            console.log('Получено сообщение:', msg);
-            
-            switch(msg.type) {
-                case 'host_status':
-                    this.isHost = msg.payload.is_host;
-                    console.log('Статус хоста:', this.isHost);
-                    if (this.isHost && document.getElementById('game-phase').textContent === 'Лобби') {
-                        document.getElementById('start-game-btn').classList.remove('hidden');
-                    }
-                    break;
-                case 'game_state':
-                    this.updateGameState(msg.payload);
-                    break;
-                case 'role_assigned':
-                    this.handleRoleAssignment(msg.payload.role);
-                    break;
-                // ... остальные обработчики ...
-            }
-        };
-
-        this.socket.onmessage = (event) => {
-            const msg = JSON.parse(event.data);
-            console.log('Получено сообщение:', msg);
-            
-            switch(msg.type) {
-                case 'night_start':
-                    this.showNightInterface();
-                    break;
-                case 'day_start':
-                    this.showDayInterface(msg.payload.killed);
-                    break;
-                case 'player_killed':
-                    this.showKilledPlayer(msg.payload);
-                    break;
-                case 'game_end':
-                    this.showGameEnd(msg.payload.winner);
-                    break;
-                // ... остальные обработчики ...
-            }
-        };
-    }
-    
-    updateGameState(state) {
-        document.getElementById('game-phase').textContent = state.phase === 'night' ? 'Ночь' : 'День';
-        document.getElementById('game-day').textContent = state.day_number;
+    showNightInterface() {
+        document.getElementById('game-phase').textContent = 'Ночь';
+        document.getElementById('action-panel').classList.remove('hidden');
         
-        // Управляем видимостью кнопки "Начать игру"
-        const startBtn = document.getElementById('start-game-btn');
-        if (state.phase === 'lobby' && this.isHost) {
-            startBtn.classList.remove('hidden');
+        if (this.role === 'mafia' || this.role === 'don') {
+            this.showMessage('Выберите игрока для убийства');
+        } else if (this.role === 'sheriff') {
+            this.showMessage('Выберите игрока для проверки');
         } else {
-            startBtn.classList.add('hidden');
+            this.showMessage('Ночь - спите!');
         }
-
-        const playersList = document.getElementById('players-list');
-        playersList.innerHTML = '';
-        
-        state.players.forEach(player => {
-            const playerCard = document.createElement('div');
-            playerCard.className = 'player-card';
-            playerCard.innerHTML = `
-                <div>${player.name}</div>
-                <div>${player.alive ? 'Жив' : 'Мертв'}</div>
-            `;
-            playersList.appendChild(playerCard);
-        });
     }
-    
+
+    showDayInterface(killedPlayerId) {
+        document.getElementById('game-phase').textContent = 'День';
+        if (killedPlayerId) {
+            this.showMessage(`Ночью был убит игрок ${this.getPlayerName(killedPlayerId)}`);
+        }
+        this.showMessage('Обсудите и проголосуйте за казнь подозреваемого');
+    }
+
+    showGameEnd(winner) {
+        const winnerText = winner === 'mafia' ? 'Мафия победила!' : 'Мирные жители победили!';
+        document.getElementById('winner-message').textContent = winnerText;
+        document.getElementById('game-end').classList.remove('hidden');
+    }
+
+    handlePlayerSelection(playerId) {
+        if (!this.socket) return;
+
+        const currentPhase = document.getElementById('game-phase').textContent;
+        
+        if (currentPhase === 'Ночь') {
+            if (this.role === 'mafia' || this.role === 'don') {
+                this.socket.send(JSON.stringify({
+                    type: 'night_action',
+                    target: playerId
+                }));
+                this.showMessage(`Выбрана цель: ${this.getPlayerName(playerId)}`);
+            } else if (this.role === 'sheriff') {
+                this.socket.send(JSON.stringify({
+                    type: 'sheriff_check',
+                    target: playerId
+                }));
+                this.showMessage(`Проверяем игрока: ${this.getPlayerName(playerId)}`);
+            }
+        } else if (currentPhase === 'День') {
+            this.socket.send(JSON.stringify({
+                type: 'vote',
+                target: playerId
+            }));
+            this.showMessage(`Вы проголосовали против ${this.getPlayerName(playerId)}`);
+        }
+    }
+
+    getPlayerName(playerId) {
+        // В реальной реализации нужно получать имя из состояния игры
+        return playerId; // временная заглушка
+    }
+
     sendChatMessage() {
         const input = document.getElementById('chat-input');
         const message = input.value.trim();
@@ -233,81 +247,26 @@ class MafiaGame {
             input.value = '';
         }
     }
-    
+
     addChatMessage(message) {
         const chat = document.getElementById('chat-messages');
         const messageElement = document.createElement('div');
-        messageElement.textContent = `${message.sender}: ${message.text}`;
+        messageElement.className = 'chat-message';
+        messageElement.innerHTML = `
+            <strong>${message.sender}:</strong> ${message.text}
+            <span class="chat-time">${message.time || ''}</span>
+        `;
         chat.appendChild(messageElement);
         chat.scrollTop = chat.scrollHeight;
     }
-    
-    showMessage(text) {
-        console.log(text);
-        // Можно добавить отображение сообщений в UI
-    }
 
-    handleGameMessage(message) {
-        switch (message.type) {
-            case 'game_state':
-                this.updateGameState(message.payload);
-                break;
-            case 'role_info':
-                this.showRole(message.payload);
-                break;
-            case 'night_start':
-                this.showNightActions();
-                break;
-            case 'day_start':
-                this.showVoting();
-                break;
-            case 'game_end':
-                this.showGameEnd(message.payload);
-                break;
-        }
-    }
-    
-    showNightActions() {
-        if (this.role === 'mafia' || this.role === 'don') {
-            this.showPlayerSelector('Выберите цель для ночного действия:', players => {
-                this.socket.send(JSON.stringify({
-                    type: 'night_action',
-                    target: players[0].id
-                }));
-            });
-        }
-    }
-    
-    showVoting() {
-        this.showPlayerSelector('Голосуйте, кого казнить:', players => {
-            this.socket.send(JSON.stringify({
-                type: 'vote',
-                target: players[0].id
-            }));
-        });
-    }
-
-    handleChatMessage(message) {
-        const chat = document.getElementById('chat-messages');
-        const msgElement = document.createElement('div');
-        msgElement.innerHTML = `
-            <strong>${message.sender}</strong> 
-            [${message.time}]: ${message.text}
-        `;
-        chat.appendChild(msgElement);
-        chat.scrollTop = chat.scrollHeight;
-    }
-
-    sendChatMessage() {
-        const input = document.getElementById('chat-input');
-        const text = input.value.trim();
-        
-        if (text && this.socket) {
-            this.socket.send(JSON.stringify({
-                type: 'chat',
-                payload: text
-            }));
-            input.value = '';
+    toggleReady() {
+        if (this.socket) {
+            const readyBtn = document.getElementById('ready-btn');
+            const isReady = readyBtn.textContent.includes('Готов');
+            this.setReadyStatus(!isReady);
+            readyBtn.textContent = isReady ? 'Я готов' : 'Отменить готовность';
+            readyBtn.classList.toggle('ready', !isReady);
         }
     }
 
@@ -320,32 +279,69 @@ class MafiaGame {
         }
     }
 
-    showNightInterface() {
-        document.getElementById('game-phase').textContent = 'Ночь';
-        // Показываем соответствующие действия для роли
-        if (this.role === 'mafia' || this.role === 'don') {
-            this.showMafiaActions();
-        } else if (this.role === 'sheriff') {
-            this.showSheriffActions();
+    startGame() {
+        if (this.socket && this.isHost) {
+            this.socket.send(JSON.stringify({
+                type: 'start_game'
+            }));
         }
     }
 
-    showDayInterface(killedPlayerId) {
-        document.getElementById('game-phase').textContent = 'День';
-        if (killedPlayerId) {
-            this.showMessage(`Ночью был убит игрок ${this.getPlayerName(killedPlayerId)}`);
-        }
-        this.showVotingInterface();
+    startLobbyUpdates() {
+        this.stopLobbyUpdates();
+        this.lobbyUpdateInterval = setInterval(() => this.updateLobby(), 2000);
     }
 
-    showGameEnd(winner) {
-        const winnerText = winner === 'mafia' ? 'Мафия победила!' : 'Мирные жители победили!';
-        document.getElementById('winner-message').textContent = winnerText;
-        document.getElementById('game-end').classList.remove('hidden');
+    stopLobbyUpdates() {
+        if (this.lobbyUpdateInterval) {
+            clearInterval(this.lobbyUpdateInterval);
+            this.lobbyUpdateInterval = null;
+        }
+    }
+
+    async updateLobby() {
+        try {
+            const response = await fetch(`/lobby/${this.gameId}`);
+            if (!response.ok) return;
+            
+            const lobby = await response.json();
+            this.renderLobbyPlayers(lobby.players);
+            
+            if (this.isHost) {
+                const startBtn = document.getElementById('start-game-btn');
+                startBtn.disabled = !lobby.canStart;
+            }
+        } catch (error) {
+            console.error('Lobby update error:', error);
+        }
+    }
+
+    renderLobbyPlayers(players) {
+        const container = document.getElementById('lobby-players');
+        container.innerHTML = '';
+        
+        players.forEach(player => {
+            const playerEl = document.createElement('div');
+            playerEl.className = `player ${player.ready ? 'ready' : ''}`;
+            playerEl.innerHTML = `
+                <span class="player-name">${player.name}</span>
+                <span class="player-status">${player.ready ? '✓ Готов' : 'Не готов'}</span>
+            `;
+            container.appendChild(playerEl);
+        });
+    }
+
+    showMessage(text) {
+        const messageBox = document.getElementById('game-message');
+        if (messageBox) {
+            messageBox.textContent = text;
+            messageBox.classList.remove('hidden');
+            setTimeout(() => messageBox.classList.add('hidden'), 3000);
+        }
+        console.log(text);
     }
 }
 
-// Инициализация игры при загрузке страницы
 document.addEventListener('DOMContentLoaded', () => {
     window.game = new MafiaGame();
 });
