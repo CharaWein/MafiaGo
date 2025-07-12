@@ -156,22 +156,6 @@ func (g *Game) SetVote(playerID, targetID string) {
 	g.Votes[playerID] = targetID
 }
 
-func (g *Game) SetReadyStatus(playerID string, ready bool) {
-	g.Mu.Lock()
-	defer g.Mu.Unlock()
-
-	if p, exists := g.Players[playerID]; exists {
-		if p.Ready != ready {
-			p.Ready = ready
-			if ready {
-				g.readyPlayers++
-			} else {
-				g.readyPlayers--
-			}
-		}
-	}
-}
-
 func (g *Game) getSheriffID() string {
 	g.Mu.Lock()
 	defer g.Mu.Unlock()
@@ -475,24 +459,37 @@ func (g *Game) BroadcastPlayersList() {
 	g.Broadcast(msg)
 }
 
+func (g *Game) allPlayersReady() bool {
+	for _, p := range g.Players {
+		if !p.Ready {
+			return false
+		}
+	}
+	return true
+}
+
 func (g *Game) BroadcastLobbyState() {
 	g.Mu.Lock()
 	defer g.Mu.Unlock()
 
 	players := make([]PlayerInfo, 0, len(g.Players))
+	readyCount := 0
 	for _, p := range g.Players {
 		players = append(players, PlayerInfo{
 			ID:    p.ID,
 			Name:  p.Name,
 			Ready: p.Ready,
 		})
+		if p.Ready {
+			readyCount++
+		}
 	}
 
 	msg := map[string]interface{}{
 		"type": "lobby_state",
 		"payload": map[string]interface{}{
 			"players":  players,
-			"canStart": len(players) >= 4 && g.allPlayersReady(),
+			"canStart": len(players) >= 4 && readyCount == len(players),
 		},
 	}
 
@@ -503,11 +500,11 @@ func (g *Game) BroadcastLobbyState() {
 	}
 }
 
-func (g *Game) allPlayersReady() bool {
-	for _, p := range g.Players {
-		if !p.Ready {
-			return false
-		}
+func (g *Game) SetReadyStatus(playerID string, ready bool) {
+	g.Mu.Lock()
+	defer g.Mu.Unlock()
+
+	if player, exists := g.Players[playerID]; exists {
+		player.Ready = ready
 	}
-	return true
 }

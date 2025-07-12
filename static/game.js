@@ -74,13 +74,9 @@ class MafiaGame {
         
         this.socket = new WebSocket(wsUrl);
 
-        this.socket.onopen = () => {
-            console.log('WebSocket connection established');
-        };
-
         this.socket.onmessage = (event) => {
             const msg = JSON.parse(event.data);
-            console.log('Message received:', msg);
+            console.log('WebSocket message:', msg);
             
             switch(msg.type) {
                 case 'lobby_state':
@@ -94,10 +90,42 @@ class MafiaGame {
                     }
                     break;
                 case 'game_started':
-                    this.showGameScreen();
+                    this.startGame();
                     break;
             }
         };
+    }
+
+    toggleReady() {
+        if (!this.socket) return;
+        
+        const readyBtn = document.getElementById('ready-btn');
+        const isReady = !readyBtn.textContent.includes('✓');
+        
+        this.socket.send(JSON.stringify({
+            type: 'set_ready',
+            ready: isReady
+        }));
+        
+        // Визуальное обновление кнопки
+        readyBtn.textContent = isReady ? '✓ Готов' : 'Готов';
+        readyBtn.classList.toggle('ready', isReady);
+    }
+
+    updatePlayersList(players) {
+        console.log('Updating players list:', players);
+        const listElement = document.getElementById('players-list');
+        listElement.innerHTML = '';
+        
+        players.forEach(player => {
+            const playerElement = document.createElement('div');
+            playerElement.className = `player ${player.ready ? 'ready' : ''}`;
+            playerElement.innerHTML = `
+                <span class="player-name">${player.name}</span>
+                <span class="player-status">${player.ready ? '✓ Готов' : 'Не готов'}</span>
+            `;
+            listElement.appendChild(playerElement);
+        });
     }
 
     updatePlayersList(players) {

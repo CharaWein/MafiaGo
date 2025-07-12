@@ -59,6 +59,14 @@ button {
     background: #e8f5e9;
 }
 
+#ready-btn.ready {
+    background-color: #4CAF50;
+}
+
+#ready-btn:not(.ready) {
+    background-color: #f44336;
+}
+
 .player-name {
     font-weight: bold;
 }

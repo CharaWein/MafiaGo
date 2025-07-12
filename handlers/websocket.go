@@ -36,13 +36,11 @@ func (h *Handler) WebSocketHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Создаем нового игрока
 	player := game.NewPlayer(playerName, conn)
 	gameInstance.AddPlayer(player)
 
-	// Сразу отправляем текущее состояние лобби
-	gameInstance.BroadcastLobbyState()
-
-	// Уведомляем о статусе хоста
+	// Устанавливаем статус хоста
 	isHost := len(gameInstance.Players) == 1
 	if isHost {
 		conn.WriteJSON(map[string]interface{}{
@@ -53,10 +51,13 @@ func (h *Handler) WebSocketHandler(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
+	// Отправляем текущее состояние лобби всем игрокам
+	gameInstance.BroadcastLobbyState()
+
 	for {
 		var msg map[string]interface{}
 		if err := conn.ReadJSON(&msg); err != nil {
-			log.Printf("Read error: %v", err)
+			log.Printf("Player %s disconnected: %v", player.Name, err)
 			gameInstance.RemovePlayer(player.ID)
 			gameInstance.BroadcastLobbyState()
 			break
@@ -67,7 +68,7 @@ func (h *Handler) WebSocketHandler(w http.ResponseWriter, r *http.Request) {
 		switch msg["type"] {
 		case "set_ready":
 			if ready, ok := msg["ready"].(bool); ok {
-				player.Ready = ready
+				gameInstance.SetReadyStatus(player.ID, ready)
 				gameInstance.BroadcastLobbyState()
 			}
 		case "start_game":
