@@ -10,33 +10,36 @@
     <div class="container">
         <h1>Онлайн Мафия</h1>
         
-        <div id="lobby-screen">
-            <button id="create-game-btn">Создать игру</button>
-            <div class="join-game">
-                <input type="text" id="game-id-input" placeholder="ID игры">
-                <input type="text" id="player-name-input" placeholder="Ваше имя">
-                <button id="join-game-btn">Присоединиться</button>
+        <!-- Стартовый экран -->
+        <div id="start-screen">
+            <div class="input-group">
+                <input type="text" id="player-name-input" placeholder="Ваше имя" required>
             </div>
             
-            <div id="lobby-players-container">
-                <h3>Игроки в лобби:</h3>
-                <div id="lobby-players"></div>
-                <button id="ready-btn">Я готов</button>
-            </div>
-
-            <div id="lobby-controls">
-                <h3>Игроки в лобби (<span id="players-count">0</span>/10)</h3>
-                <div id="lobby-players" class="players-container"></div>
+            <div class="actions">
+                <button id="create-game-btn">Создать игру</button>
                 
-                <div class="lobby-actions">
-                    <button id="ready-btn">Я готов</button>
-                    <button id="start-game-btn" class="host-only hidden">Начать игру</button>
+                <div class="join-section">
+                    <input type="text" id="game-id-input" placeholder="ID игры">
+                    <button id="join-game-btn">Присоединиться</button>
                 </div>
             </div>
-            
-            <button id="start-game-btn" class="hidden" disabled>Начать игру</button>
         </div>
         
+        <!-- Лобби (скрыто изначально) -->
+        <div id="lobby-screen" class="hidden">
+            <h2>Ожидание игроков</h2>
+            <div class="game-id-display">ID комнаты: <span id="game-id-display"></span></div>
+            
+            <div id="players-list" class="players-list"></div>
+            
+            <div class="lobby-actions">
+                <button id="ready-btn">Готов</button>
+                <button id="start-game-btn" class="host-only hidden">Начать игру</button>
+            </div>
+        </div>
+        
+        <!-- Игровой экран (скрыт изначально) -->
         <div id="game-screen" class="hidden">
             <div class="game-info">
                 <div>ID игры: <span id="game-id-display"></span></div>

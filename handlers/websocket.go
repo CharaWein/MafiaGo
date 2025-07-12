@@ -1,58 +1,7 @@
-package handlers
-
-import (
-	"log"
-	"net/http"
-	"time"
-
-	"github.com/CharaWein/mafia-game/game"
-	"github.com/gorilla/websocket"
-)
-
-var upgrader = websocket.Upgrader{
-	CheckOrigin: func(r *http.Request) bool { return true },
-}
-
-func (h *Handler) getPlayerByConn(conn *websocket.Conn) *game.Player {
-	gamesMutex.Lock()
-	defer gamesMutex.Unlock()
-
-	for _, g := range games {
-		for _, p := range g.Players {
-			if p.Conn == conn {
-				return p
-			}
-		}
-	}
-	return nil
-}
-
-func (h *Handler) getGameByPlayer(playerID string) *game.Game {
-	gamesMutex.Lock()
-	defer gamesMutex.Unlock()
-
-	for _, g := range games {
-		if _, exists := g.Players[playerID]; exists {
-			return g
-		}
-	}
-	return nil
-}
-
-func (h *Handler) isHost(player *game.Player, game *game.Game) bool {
-	if len(game.Players) == 0 {
-		return false
-	}
-	for _, p := range game.Players {
-		return p.ID == player.ID // Первый игрок - хост
-	}
-	return false
-}
-
 func (h *Handler) WebSocketHandler(w http.ResponseWriter, r *http.Request) {
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		log.Printf("WebSocket upgrade failed: %v", err)
+		log.Println("Upgrade error:", err)
 		return
 	}
 	defer conn.Close()
@@ -61,127 +10,73 @@ func (h *Handler) WebSocketHandler(w http.ResponseWriter, r *http.Request) {
 	playerName := r.URL.Query().Get("name")
 
 	gamesMutex.Lock()
-	gameInstance, exists := games[gameID]
+	game, exists := games[gameID]
 	gamesMutex.Unlock()
 
 	if !exists {
-		conn.WriteJSON(game.Message{Type: "error", Payload: "Game not found"})
+		conn.WriteJSON(map[string]interface{}{
+			"type":    "error",
+			"message": "Игра не найдена",
+		})
 		return
 	}
 
 	player := game.NewPlayer(playerName, conn)
-	gameInstance.AddPlayer(player)
+	game.AddPlayer(player)
 
-	isHost := len(gameInstance.Players) == 1
-	conn.WriteJSON(game.Message{
-		Type: "host_status",
-		Payload: map[string]bool{
-			"is_host": isHost,
-		},
-	})
+	// Отправляем текущий список игроков
+	game.BroadcastPlayersList()
 
-	gameInstance.Broadcast(game.Message{
-		Type: "player_joined",
-		Payload: game.PlayerInfo{
-			ID:   player.ID,
-			Name: player.Name,
-		},
+	// Уведомляем нового игрока, является ли он хостом
+	isHost := len(game.Players) == 1
+	conn.WriteJSON(map[string]interface{}{
+		"type":   "host_status",
+		"isHost": isHost,
 	})
 
 	for {
-		var msg game.Message
+		var msg map[string]interface{}
 		if err := conn.ReadJSON(&msg); err != nil {
-			log.Printf("Игрок %s вышел: %v", player.Name, err)
-			gameInstance.RemovePlayer(player.ID)
-			gameInstance.Broadcast(game.Message{
-				Type:    "player_left",
-				Payload: player.ID,
-			})
+			game.RemovePlayer(player.ID)
+			game.BroadcastPlayersList()
 			break
 		}
 
-		player.LastSeen = time.Now()
-
-		switch msg.Type {
-		case "kick_player":
-			if playerID, ok := msg.Payload.(string); ok && h.isHost(player, gameInstance) {
-				gameInstance.RemovePlayer(playerID)
-				if p, exists := gameInstance.Players[playerID]; exists && p.Conn != nil {
-					p.Conn.WriteJSON(game.Message{
-						Type:    "kicked",
-						Payload: "Вас исключили из игры",
-					})
-					p.Conn.Close()
-				}
-				gameInstance.Broadcast(game.Message{
-					Type:    "player_left",
-					Payload: playerID,
-				})
-			}
-		case "night_action":
-			if target, ok := msg.Payload.(string); ok {
-				gameInstance.SetNightAction(player.ID, target)
-			}
-		case "vote":
-			if target, ok := msg.Payload.(string); ok {
-				gameInstance.SetVote(player.ID, target)
-			}
-		case "chat":
-			if text, ok := msg.Payload.(string); ok {
-				broadcastChat(gameInstance, player, text)
-			}
-		case "ready":
-			if ready, ok := msg.Payload.(bool); ok {
-				gameInstance.SetReadyStatus(player.ID, ready)
+		switch msg["type"] {
+		case "set_ready":
+			if ready, ok := msg["ready"].(bool); ok {
+				player.Ready = ready
+				game.BroadcastPlayersList()
 			}
 		case "start_game":
-			h.handleStartGame(conn)
+			if isHost {
+				game.Start()
+			}
 		}
 	}
 }
 
-func (h *Handler) handleStartGame(ws *websocket.Conn) {
-	player := h.getPlayerByConn(ws)
-	if player == nil {
-		return
+func (g *Game) BroadcastPlayersList() {
+	g.Mu.Lock()
+	defer g.Mu.Unlock()
+
+	players := make([]map[string]interface{}, 0)
+	for _, p := range g.Players {
+		players = append(players, map[string]interface{}{
+			"id":    p.ID,
+			"name":  p.Name,
+			"ready": p.Ready,
+		})
 	}
 
-	game := h.getGameByPlayer(player.ID)
-	if game == nil {
-		return
+	msg := map[string]interface{}{
+		"type":    "players_update",
+		"players": players,
 	}
 
-	// Проверяем, что это ведущий (первый подключившийся игрок)
-	if len(game.Players) > 0 {
-		firstPlayerID := ""
-		for id := range game.Players {
-			firstPlayerID = id
-			break
+	for _, p := range g.Players {
+		if p.Conn != nil {
+			p.Conn.WriteJSON(msg)
 		}
-		if firstPlayerID == player.ID {
-			game.Start()
-			h.broadcastGameState(game)
-		}
 	}
-}
-
-func (h *Handler) broadcastGameState(g *game.Game) {
-	state := g.GetGameState()
-	msg := game.Message{
-		Type:    "game_state",
-		Payload: state,
-	}
-	g.Broadcast(msg)
-}
-
-func broadcastChat(g *game.Game, sender *game.Player, text string) {
-	msg := game.Message{
-		Type: "chat",
-		Payload: game.ChatMessage{
-			Sender: sender.Name,
-			Text:   text,
-			Time:   time.Now().Format("15:04"),
-		},
-	}
-	g.Broadcast(msg)
 }
