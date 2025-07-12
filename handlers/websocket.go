@@ -68,8 +68,11 @@ func (h *Handler) WebSocketHandler(w http.ResponseWriter, r *http.Request) {
 		switch msg["type"] {
 		case "set_ready":
 			if ready, ok := msg["ready"].(bool); ok {
-				gameInstance.SetReadyStatus(player.ID, ready)
+				player.Ready = ready
 				gameInstance.BroadcastLobbyState()
+
+				// Логирование для отладки
+				log.Printf("Player %s ready status: %v", player.Name, ready)
 			}
 		case "start_game":
 			if isHost {

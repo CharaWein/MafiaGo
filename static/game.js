@@ -5,6 +5,7 @@ class MafiaGame {
         this.playerName = null;
         this.isHost = false;
         this.players = [];
+        this.readyStatus = false;
         
         this.initEventListeners();
     }
@@ -99,17 +100,20 @@ class MafiaGame {
     toggleReady() {
         if (!this.socket) return;
         
+        this.readyStatus = !this.readyStatus;
         const readyBtn = document.getElementById('ready-btn');
-        const isReady = !readyBtn.textContent.includes('✓');
         
+        // Визуальное обновление
+        readyBtn.textContent = this.readyStatus ? '✓ Готов' : 'Готов';
+        readyBtn.className = this.readyStatus ? 'ready' : '';
+        
+        // Отправка на сервер
         this.socket.send(JSON.stringify({
             type: 'set_ready',
-            ready: isReady
+            ready: this.readyStatus
         }));
         
-        // Визуальное обновление кнопки
-        readyBtn.textContent = isReady ? '✓ Готов' : 'Готов';
-        readyBtn.classList.toggle('ready', isReady);
+        console.log('Sent ready status:', this.readyStatus);
     }
 
     updatePlayersList(players) {
@@ -120,26 +124,15 @@ class MafiaGame {
         players.forEach(player => {
             const playerElement = document.createElement('div');
             playerElement.className = `player ${player.ready ? 'ready' : ''}`;
+            
+            // Добавляем ID игрока в данные элемента
+            playerElement.dataset.playerId = player.id;
+            
             playerElement.innerHTML = `
                 <span class="player-name">${player.name}</span>
-                <span class="player-status">${player.ready ? '✓ Готов' : 'Не готов'}</span>
-            `;
-            listElement.appendChild(playerElement);
-        });
-    }
-
-    updatePlayersList(players) {
-        console.log('Updating players list:', players);
-        this.players = players;
-        const listElement = document.getElementById('players-list');
-        listElement.innerHTML = '';
-        
-        players.forEach(player => {
-            const playerElement = document.createElement('div');
-            playerElement.className = `player ${player.ready ? 'ready' : ''}`;
-            playerElement.innerHTML = `
-                <span class="player-name">${player.name}</span>
-                <span class="player-status">${player.ready ? '✓ Готов' : 'Не готов'}</span>
+                <span class="player-status">
+                    ${player.ready ? '✓ Готов' : 'Не готов'}
+                </span>
             `;
             listElement.appendChild(playerElement);
         });

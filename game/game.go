@@ -1,6 +1,7 @@
 package game
 
 import (
+	"log"
 	"math/rand"
 	"sync"
 	"time"
@@ -480,6 +481,7 @@ func (g *Game) BroadcastLobbyState() {
 			Name:  p.Name,
 			Ready: p.Ready,
 		})
+		log.Printf("Player %s ready: %v", p.Name, p.Ready)
 		if p.Ready {
 			readyCount++
 		}
@@ -489,7 +491,7 @@ func (g *Game) BroadcastLobbyState() {
 		"type": "lobby_state",
 		"payload": map[string]interface{}{
 			"players":  players,
-			"canStart": len(players) >= 4 && readyCount == len(players),
+			"canStart": g.canStartGame(),
 		},
 	}
 
@@ -498,6 +500,18 @@ func (g *Game) BroadcastLobbyState() {
 			p.Conn.WriteJSON(msg)
 		}
 	}
+}
+
+func (g *Game) canStartGame() bool {
+	if len(g.Players) < 4 {
+		return false
+	}
+	for _, p := range g.Players {
+		if !p.Ready {
+			return false
+		}
+	}
+	return true
 }
 
 func (g *Game) SetReadyStatus(playerID string, ready bool) {
