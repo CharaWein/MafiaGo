@@ -39,6 +39,16 @@ func (h *Handler) getGameByPlayer(playerID string) *game.Game {
 	return nil
 }
 
+func (h *Handler) isHost(player *game.Player, game *game.Game) bool {
+	if len(game.Players) == 0 {
+		return false
+	}
+	for _, p := range game.Players {
+		return p.ID == player.ID // Первый игрок - хост
+	}
+	return false
+}
+
 func (h *Handler) WebSocketHandler(w http.ResponseWriter, r *http.Request) {
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
@@ -70,17 +80,44 @@ func (h *Handler) WebSocketHandler(w http.ResponseWriter, r *http.Request) {
 		},
 	})
 
+	gameInstance.Broadcast(game.Message{
+		Type: "player_joined",
+		Payload: game.PlayerInfo{
+			ID:   player.ID,
+			Name: player.Name,
+		},
+	})
+
 	for {
 		var msg game.Message
 		if err := conn.ReadJSON(&msg); err != nil {
-			log.Printf("Read error: %v", err)
+			log.Printf("Игрок %s вышел: %v", player.Name, err)
 			gameInstance.RemovePlayer(player.ID)
+			gameInstance.Broadcast(game.Message{
+				Type:    "player_left",
+				Payload: player.ID,
+			})
 			break
 		}
 
 		player.LastSeen = time.Now()
 
 		switch msg.Type {
+		case "kick_player":
+			if playerID, ok := msg.Payload.(string); ok && h.isHost(player, gameInstance) {
+				gameInstance.RemovePlayer(playerID)
+				if p, exists := gameInstance.Players[playerID]; exists && p.Conn != nil {
+					p.Conn.WriteJSON(game.Message{
+						Type:    "kicked",
+						Payload: "Вас исключили из игры",
+					})
+					p.Conn.Close()
+				}
+				gameInstance.Broadcast(game.Message{
+					Type:    "player_left",
+					Payload: playerID,
+				})
+			}
 		case "night_action":
 			if target, ok := msg.Payload.(string); ok {
 				gameInstance.SetNightAction(player.ID, target)

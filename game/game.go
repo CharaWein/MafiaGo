@@ -34,6 +34,7 @@ type Game struct {
 	Votes        map[string]string
 	NightActions map[string]string
 	readyPlayers int
+	HostID       string // ID игрока-хоста
 }
 
 type LobbyState struct {
@@ -54,9 +55,21 @@ func NewGame() *Game {
 	}
 }
 
+// Новый метод для проверки прав хоста
+func (g *Game) IsHost(playerID string) bool {
+	g.Mu.Lock()
+	defer g.Mu.Unlock()
+	return g.HostID == playerID
+}
+
 func (g *Game) AddPlayer(p *Player) {
 	g.Mu.Lock()
 	defer g.Mu.Unlock()
+
+	if len(g.Players) == 0 {
+		g.HostID = p.ID
+	}
+
 	g.Players[p.ID] = p
 }
 

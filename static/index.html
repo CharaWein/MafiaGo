@@ -23,6 +23,16 @@
                 <div id="lobby-players"></div>
                 <button id="ready-btn">Я готов</button>
             </div>
+
+            <div id="lobby-controls">
+                <h3>Игроки в лобби (<span id="players-count">0</span>/10)</h3>
+                <div id="lobby-players" class="players-container"></div>
+                
+                <div class="lobby-actions">
+                    <button id="ready-btn">Я готов</button>
+                    <button id="start-game-btn" class="host-only hidden">Начать игру</button>
+                </div>
+            </div>
             
             <button id="start-game-btn" class="hidden" disabled>Начать игру</button>
         </div>
@@ -65,6 +75,11 @@
                 <h2>Игра окончена!</h2>
                 <p id="winner-message"></p>
                 <button onclick="location.reload()">Новая игра</button>
+            </div>
+
+            <div id="game-players">
+                <h3>Игроки в игре</h3>
+                <div id="players-list" class="players-container"></div>
             </div>
         </div>
     </div>

@@ -9,6 +9,8 @@ class MafiaGame {
         this.lobbyUpdateInterval = null;
         
         this.initEventListeners();
+
+        this.players = []; // Храним список игроков
     }
     
     initEventListeners() {
@@ -77,7 +79,9 @@ class MafiaGame {
         this.socket = new WebSocket(wsUrl);
 
         this.socket.onopen = () => {
-            console.log('WebSocket соединение установлено');
+            this.socket.send(JSON.stringify({
+                type: 'get_players'
+            }));
         };
 
         this.socket.onclose = () => {
@@ -86,7 +90,6 @@ class MafiaGame {
 
         this.socket.onmessage = (event) => {
             const msg = JSON.parse(event.data);
-            console.log('Получено сообщение:', msg);
             
             switch(msg.type) {
                 case 'host_status':
@@ -115,6 +118,16 @@ class MafiaGame {
                     break;
                 case 'chat_message':
                     this.addChatMessage(msg.payload);
+                    break;
+                case 'player_joined':
+                    this.handlePlayerJoined(msg.payload);
+                    break;
+                case 'player_left':
+                    this.handlePlayerLeft(msg.payload);
+                    break;
+                case 'kicked':
+                    alert(msg.payload);
+                    location.reload();
                     break;
                 default:
                     console.log('Неизвестный тип сообщения:', msg);
@@ -316,6 +329,39 @@ class MafiaGame {
         }
     }
 
+    showMessage(text) {
+        const messageBox = document.getElementById('game-message');
+        if (messageBox) {
+            messageBox.textContent = text;
+            messageBox.classList.remove('hidden');
+            setTimeout(() => messageBox.classList.add('hidden'), 3000);
+        }
+        console.log(text);
+    }
+
+    getPlayerList() {
+        return this.players.map(player => ({
+            id: player.id,
+            name: player.name,
+            ready: player.ready || false
+        }));
+    }
+
+    updatePlayerList(players) {
+        this.players = players;
+        this.renderLobbyPlayers(players);
+    }
+
+    handlePlayerJoined(player) {
+        this.players.push(player);
+        this.renderLobbyPlayers(this.players);
+    }
+
+    handlePlayerLeft(playerId) {
+        this.players = this.players.filter(p => p.id !== playerId);
+        this.renderLobbyPlayers(this.players);
+    }
+
     renderLobbyPlayers(players) {
         const container = document.getElementById('lobby-players');
         container.innerHTML = '';
@@ -326,19 +372,26 @@ class MafiaGame {
             playerEl.innerHTML = `
                 <span class="player-name">${player.name}</span>
                 <span class="player-status">${player.ready ? '✓ Готов' : 'Не готов'}</span>
+                ${this.isHost && !player.ready ? `<button class="kick-btn" data-id="${player.id}">✖</button>` : ''}
             `;
             container.appendChild(playerEl);
         });
+
+        // Добавляем обработчики для кнопок исключения
+        document.querySelectorAll('.kick-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                this.kickPlayer(e.target.dataset.id);
+            });
+        });
     }
 
-    showMessage(text) {
-        const messageBox = document.getElementById('game-message');
-        if (messageBox) {
-            messageBox.textContent = text;
-            messageBox.classList.remove('hidden');
-            setTimeout(() => messageBox.classList.add('hidden'), 3000);
+    kickPlayer(playerId) {
+        if (this.socket && this.isHost) {
+            this.socket.send(JSON.stringify({
+                type: 'kick_player',
+                player_id: playerId
+            }));
         }
-        console.log(text);
     }
 }
 
