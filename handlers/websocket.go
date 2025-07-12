@@ -29,9 +29,9 @@ func (h *Handler) WebSocketHandler(w http.ResponseWriter, r *http.Request) {
 	gamesMutex.Unlock()
 
 	if !exists {
-		conn.WriteJSON(game.Message{
-			Type:    "error",
-			Payload: "Game not found",
+		conn.WriteJSON(map[string]interface{}{
+			"type":    "error",
+			"payload": "Game not found",
 		})
 		return
 	}
@@ -39,41 +39,36 @@ func (h *Handler) WebSocketHandler(w http.ResponseWriter, r *http.Request) {
 	player := game.NewPlayer(playerName, conn)
 	gameInstance.AddPlayer(player)
 
-	// Отправляем текущее состояние лобби новому игроку
-	conn.WriteJSON(game.Message{
-		Type:    "lobby_state",
-		Payload: gameInstance.GetLobbyState(),
-	})
+	// Сразу отправляем текущее состояние лобби
+	gameInstance.BroadcastLobbyState()
 
-	// Уведомляем всех игроков о новом участнике
-	gameInstance.BroadcastPlayersList()
-
-	// Уведомляем игрока, является ли он хостом
+	// Уведомляем о статусе хоста
 	isHost := len(gameInstance.Players) == 1
-	conn.WriteJSON(game.Message{
-		Type: "host_status",
-		Payload: map[string]bool{
-			"isHost": isHost,
-		},
-	})
+	if isHost {
+		conn.WriteJSON(map[string]interface{}{
+			"type": "host_status",
+			"payload": map[string]bool{
+				"isHost": true,
+			},
+		})
+	}
 
 	for {
-		var msg game.Message
+		var msg map[string]interface{}
 		if err := conn.ReadJSON(&msg); err != nil {
 			log.Printf("Read error: %v", err)
 			gameInstance.RemovePlayer(player.ID)
-			gameInstance.BroadcastPlayersList()
+			gameInstance.BroadcastLobbyState()
 			break
 		}
 
 		player.LastSeen = time.Now()
 
-		switch msg.Type {
+		switch msg["type"] {
 		case "set_ready":
-			if ready, ok := msg.Payload.(bool); ok {
+			if ready, ok := msg["ready"].(bool); ok {
 				player.Ready = ready
-				gameInstance.SetReadyStatus(player.ID, ready)
-				gameInstance.BroadcastPlayersList()
+				gameInstance.BroadcastLobbyState()
 			}
 		case "start_game":
 			if isHost {

@@ -474,3 +474,40 @@ func (g *Game) BroadcastPlayersList() {
 
 	g.Broadcast(msg)
 }
+
+func (g *Game) BroadcastLobbyState() {
+	g.Mu.Lock()
+	defer g.Mu.Unlock()
+
+	players := make([]PlayerInfo, 0, len(g.Players))
+	for _, p := range g.Players {
+		players = append(players, PlayerInfo{
+			ID:    p.ID,
+			Name:  p.Name,
+			Ready: p.Ready,
+		})
+	}
+
+	msg := map[string]interface{}{
+		"type": "lobby_state",
+		"payload": map[string]interface{}{
+			"players":  players,
+			"canStart": len(players) >= 4 && g.allPlayersReady(),
+		},
+	}
+
+	for _, p := range g.Players {
+		if p.Conn != nil {
+			p.Conn.WriteJSON(msg)
+		}
+	}
+}
+
+func (g *Game) allPlayersReady() bool {
+	for _, p := range g.Players {
+		if !p.Ready {
+			return false
+		}
+	}
+	return true
+}

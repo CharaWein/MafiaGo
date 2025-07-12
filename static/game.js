@@ -87,9 +87,6 @@ class MafiaGame {
                     this.updatePlayersList(msg.payload.players);
                     this.updateStartButton(msg.payload.canStart);
                     break;
-                case 'players_update':
-                    this.updatePlayersList(msg.payload.players);
-                    break;
                 case 'host_status':
                     this.isHost = msg.payload.isHost;
                     if (this.isHost) {
@@ -104,6 +101,7 @@ class MafiaGame {
     }
 
     updatePlayersList(players) {
+        console.log('Updating players list:', players);
         this.players = players;
         const listElement = document.getElementById('players-list');
         listElement.innerHTML = '';
@@ -117,6 +115,18 @@ class MafiaGame {
             `;
             listElement.appendChild(playerElement);
         });
+    }
+
+    toggleReady() {
+        if (this.socket) {
+            const isReady = !document.getElementById('ready-btn').textContent.includes('✓');
+            this.socket.send(JSON.stringify({
+                type: 'set_ready',
+                ready: isReady
+            }));
+            
+            document.getElementById('ready-btn').textContent = isReady ? '✓ Готов' : 'Готов';
+        }
     }
 
     updateStartButton(canStart) {
