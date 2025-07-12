@@ -3,6 +3,7 @@ package handlers
 import (
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/CharaWein/mafia-game/game"
 	"github.com/gorilla/websocket"
@@ -58,18 +59,17 @@ func (h *Handler) WebSocketHandler(w http.ResponseWriter, r *http.Request) {
 		if err := conn.ReadJSON(&msg); err != nil {
 			log.Printf("Player %s disconnected: %v", player.Name, err)
 			gameInstance.RemovePlayer(player.ID)
-			gameInstance.BroadcastLobbyState()
+			gameInstance.BroadcastPlayersUpdate()
 			break
 		}
 
-		log.Printf("Received message: %+v", msg) // Логируем входящие сообщения
+		player.LastSeen = time.Now()
 
 		switch msg["type"] {
 		case "set_ready":
 			if ready, ok := msg["ready"].(bool); ok {
-				log.Printf("Setting ready status for %s to %v", player.Name, ready)
 				player.Ready = ready
-				gameInstance.BroadcastLobbyState()
+				gameInstance.BroadcastPlayersUpdate()
 			}
 		case "start_game":
 			if isHost {

@@ -491,7 +491,7 @@ func (g *Game) BroadcastLobbyState() {
 		"type": "lobby_state",
 		"payload": map[string]interface{}{
 			"players":  players,
-			"canStart": g.canStartGame(),
+			"canStart": g.CanStartGame(),
 		},
 	}
 
@@ -502,10 +502,14 @@ func (g *Game) BroadcastLobbyState() {
 	}
 }
 
-func (g *Game) canStartGame() bool {
+func (g *Game) CanStartGame() bool {
+	g.Mu.Lock()
+	defer g.Mu.Unlock()
+
 	if len(g.Players) < 4 {
 		return false
 	}
+
 	for _, p := range g.Players {
 		if !p.Ready {
 			return false
@@ -525,4 +529,27 @@ func (g *Game) SetReadyStatus(playerID string, ready bool) {
 	} else {
 		log.Printf("Player %s not found for ready status update", playerID)
 	}
+}
+
+func (g *Game) BroadcastPlayersUpdate() {
+	g.Mu.Lock()
+	players := make([]PlayerInfo, 0, len(g.Players))
+	for _, p := range g.Players {
+		players = append(players, PlayerInfo{
+			ID:    p.ID,
+			Name:  p.Name,
+			Ready: p.Ready,
+		})
+	}
+	g.Mu.Unlock()
+
+	msg := Message{
+		Type: "players_update",
+		Payload: map[string]interface{}{
+			"players":  players,
+			"canStart": g.CanStartGame(),
+		},
+	}
+
+	g.Broadcast(msg)
 }

@@ -57,6 +57,19 @@ button {
 
 .player.ready {
     background: #e8f5e9;
+    border-left: 4px solid #4CAF50;
+}
+
+.player .player-status {
+    font-weight: bold;
+}
+
+.player.ready .player-status {
+    color: #2E7D32;
+}
+
+.player:not(.ready) .player-status {
+    color: #c62828;
 }
 
 #ready-btn.ready {
