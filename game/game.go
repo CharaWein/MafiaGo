@@ -4,6 +4,8 @@ import (
 	"math/rand"
 	"sync"
 	"time"
+
+	"github.com/gorilla/websocket"
 )
 
 const (
@@ -52,6 +54,18 @@ func NewGame() *Game {
 		Votes:        make(map[string]string),
 		NightActions: make(map[string]string),
 		readyPlayers: 0,
+	}
+}
+
+// NewPlayer создает нового игрока (перенесено из player.go)
+func (g *Game) NewPlayer(name string, conn *websocket.Conn) *Player {
+	return &Player{
+		ID:       generateID(),
+		Name:     name,
+		Conn:     conn,
+		Alive:    true,
+		Ready:    false,
+		LastSeen: time.Now(),
 	}
 }
 
@@ -436,4 +450,27 @@ func (g *Game) GetLobbyState() LobbyState {
 		Players:  players,
 		CanStart: len(players) >= 4 && g.readyPlayers == len(players),
 	}
+}
+
+func (g *Game) BroadcastPlayersList() {
+	g.Mu.Lock()
+	defer g.Mu.Unlock()
+
+	players := make([]PlayerInfo, 0, len(g.Players))
+	for _, p := range g.Players {
+		players = append(players, PlayerInfo{
+			ID:    p.ID,
+			Name:  p.Name,
+			Ready: p.Ready,
+		})
+	}
+
+	msg := Message{
+		Type: "players_update",
+		Payload: map[string]interface{}{
+			"players": players,
+		},
+	}
+
+	g.Broadcast(msg)
 }

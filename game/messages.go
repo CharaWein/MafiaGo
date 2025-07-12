@@ -6,8 +6,11 @@ const (
 	MsgGameState    MessageType = "game_state"
 	MsgChat         MessageType = "chat"
 	MsgPlayerJoined MessageType = "player_joined"
+	MsgPlayerLeft   MessageType = "player_left"
 	MsgNightStart   MessageType = "night_start"
 	MsgDayStart     MessageType = "day_start"
+	MsgPlayersList  MessageType = "players_update"
+	MsgHostStatus   MessageType = "host_status"
 )
 
 type Message struct {

@@ -10,17 +10,16 @@ import (
 
 func main() {
 	r := mux.NewRouter()
-	h := handlers.NewHandler() // Используем короткое имя h вместо handler
+	h := handlers.NewHandler()
 
+	// Настройка маршрутов
 	r.HandleFunc("/create", h.CreateGame).Methods("POST")
 	r.HandleFunc("/join/{gameID}", h.JoinGame).Methods("POST")
-	r.HandleFunc("/state/{gameID}", h.GetGameState).Methods("GET")
-	r.HandleFunc("/ws", h.WebSocketHandler)
 	r.HandleFunc("/lobby/{gameID}", h.GetLobbyState).Methods("GET")
-
-	// Static files
+	r.HandleFunc("/ws", h.WebSocketHandler)
 	r.PathPrefix("/").Handler(http.FileServer(http.Dir("./static")))
 
-	log.Println("Server starting on :8080")
-	log.Fatal(http.ListenAndServe(":8080", r))
+	port := ":8080"
+	log.Printf("Server starting on port %s", port)
+	log.Fatal(http.ListenAndServe(port, r))
 }

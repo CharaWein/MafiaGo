@@ -1,7 +1,22 @@
+package handlers
+
+import (
+	"log"
+	"net/http"
+	"time"
+
+	"github.com/CharaWein/mafia-game/game"
+	"github.com/gorilla/websocket"
+)
+
+var upgrader = websocket.Upgrader{
+	CheckOrigin: func(r *http.Request) bool { return true },
+}
+
 func (h *Handler) WebSocketHandler(w http.ResponseWriter, r *http.Request) {
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		log.Println("Upgrade error:", err)
+		log.Printf("WebSocket upgrade failed: %v", err)
 		return
 	}
 	defer conn.Close()
@@ -10,73 +25,53 @@ func (h *Handler) WebSocketHandler(w http.ResponseWriter, r *http.Request) {
 	playerName := r.URL.Query().Get("name")
 
 	gamesMutex.Lock()
-	game, exists := games[gameID]
+	gameInstance, exists := games[gameID]
 	gamesMutex.Unlock()
 
 	if !exists {
 		conn.WriteJSON(map[string]interface{}{
 			"type":    "error",
-			"message": "Игра не найдена",
+			"payload": "Game not found",
 		})
 		return
 	}
 
 	player := game.NewPlayer(playerName, conn)
-	game.AddPlayer(player)
+	gameInstance.AddPlayer(player)
 
-	// Отправляем текущий список игроков
-	game.BroadcastPlayersList()
+	// Отправляем обновленный список игроков
+	gameInstance.BroadcastPlayersList()
 
-	// Уведомляем нового игрока, является ли он хостом
-	isHost := len(game.Players) == 1
+	// Уведомляем игрока, является ли он хостом
+	isHost := len(gameInstance.Players) == 1
 	conn.WriteJSON(map[string]interface{}{
-		"type":   "host_status",
-		"isHost": isHost,
+		"type": "host_status",
+		"payload": map[string]bool{
+			"isHost": isHost,
+		},
 	})
 
 	for {
 		var msg map[string]interface{}
 		if err := conn.ReadJSON(&msg); err != nil {
-			game.RemovePlayer(player.ID)
-			game.BroadcastPlayersList()
+			log.Printf("Read error: %v", err)
+			gameInstance.RemovePlayer(player.ID)
+			gameInstance.BroadcastPlayersList()
 			break
 		}
+
+		player.LastSeen = time.Now()
 
 		switch msg["type"] {
 		case "set_ready":
 			if ready, ok := msg["ready"].(bool); ok {
 				player.Ready = ready
-				game.BroadcastPlayersList()
+				gameInstance.BroadcastPlayersList()
 			}
 		case "start_game":
 			if isHost {
-				game.Start()
+				gameInstance.Start()
 			}
-		}
-	}
-}
-
-func (g *Game) BroadcastPlayersList() {
-	g.Mu.Lock()
-	defer g.Mu.Unlock()
-
-	players := make([]map[string]interface{}, 0)
-	for _, p := range g.Players {
-		players = append(players, map[string]interface{}{
-			"id":    p.ID,
-			"name":  p.Name,
-			"ready": p.Ready,
-		})
-	}
-
-	msg := map[string]interface{}{
-		"type":    "players_update",
-		"players": players,
-	}
-
-	for _, p := range g.Players {
-		if p.Conn != nil {
-			p.Conn.WriteJSON(msg)
 		}
 	}
 }

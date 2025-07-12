@@ -1,8 +1,10 @@
 services:
   - type: web
-    name: mafiago
+    name: mafia-game
     env: go
-    plan: free
-    buildCommand: go build -o mafia
-    startCommand: ./mafia
-    healthCheckPath: /
+    buildCommand: go build -tags netgo -ldflags '-s -w' -o app
+    startCommand: ./app
+    staticPublishPath: ./static
+    envVars:
+      - key: PORT
+        value: 8080
