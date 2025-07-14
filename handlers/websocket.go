@@ -3,13 +3,25 @@ package handlers
 import (
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/CharaWein/mafia-game/game"
 	"github.com/gorilla/websocket"
 )
 
+// Определяем upgrader на уровне пакета
 var upgrader = websocket.Upgrader{
-	CheckOrigin: func(r *http.Request) bool { return true },
+	CheckOrigin:      func(r *http.Request) bool { return true },
+	ReadBufferSize:   1024,
+	WriteBufferSize:  1024,
+	HandshakeTimeout: 10 * time.Second,
+}
+
+// Определяем структуру ChatMessage в пакете handlers
+type ChatMessage struct {
+	Sender string `json:"sender"`
+	Text   string `json:"text"`
+	Time   string `json:"time"`
 }
 
 func (h *Handler) WebSocketHandler(w http.ResponseWriter, r *http.Request) {
@@ -41,6 +53,7 @@ func (h *Handler) WebSocketHandler(w http.ResponseWriter, r *http.Request) {
 		"payload": map[string]interface{}{
 			"id":      player.ID,
 			"players": gameInstance.GetPlayersList(),
+			"isHost":  gameInstance.IsHost(player.ID),
 		},
 	})
 
@@ -63,7 +76,37 @@ func (h *Handler) WebSocketHandler(w http.ResponseWriter, r *http.Request) {
 		case "set_ready":
 			if ready, ok := msg.Payload.(bool); ok {
 				player.Ready = ready
+				gameInstance.SetReadyStatus(player.ID, ready)
 				gameInstance.BroadcastPlayersUpdate()
+			}
+		case "start_game":
+			if gameInstance.IsHost(player.ID) && gameInstance.CanStartGame() {
+				gameInstance.Start()
+			}
+		case "vote":
+			if payload, ok := msg.Payload.(map[string]interface{}); ok {
+				if target, ok := payload["target"].(string); ok {
+					gameInstance.SetVote(player.ID, target)
+				}
+			}
+		case "night_action":
+			if payload, ok := msg.Payload.(map[string]interface{}); ok {
+				if target, ok := payload["target"].(string); ok {
+					gameInstance.SetNightAction(player.ID, target)
+				}
+			}
+		case "chat":
+			if payload, ok := msg.Payload.(map[string]interface{}); ok {
+				if message, ok := payload["message"].(string); ok {
+					gameInstance.Broadcast(game.Message{
+						Type: "chat",
+						Payload: ChatMessage{
+							Sender: player.Name,
+							Text:   message,
+							Time:   time.Now().Format("15:04"),
+						},
+					})
+				}
 			}
 		}
 	}

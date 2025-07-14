@@ -37,7 +37,8 @@ type Game struct {
 	Votes        map[string]string
 	NightActions map[string]string
 	readyPlayers int
-	HostID       string // ID игрока-хоста
+	HostID       string        // ID игрока-хоста
+	MafiaChat    []ChatMessage `json:"mafia_chat"`
 }
 
 type LobbyState struct {
@@ -556,4 +557,30 @@ func (g *Game) BroadcastPlayersUpdate() {
 		},
 	}
 	g.Broadcast(msg)
+}
+
+// Добавить методы для работы с чатом
+func (g *Game) AddMafiaChatMessage(sender, text string) {
+	g.Mu.Lock()
+	defer g.Mu.Unlock()
+
+	g.MafiaChat = append(g.MafiaChat, ChatMessage{
+		Sender: sender,
+		Text:   text,
+		Time:   time.Now().Format("15:04"),
+	})
+
+	// Отправляем только мафии
+	for _, p := range g.Players {
+		if (p.Role == RoleMafia || p.Role == RoleDon) && p.Conn != nil {
+			p.Conn.WriteJSON(Message{
+				Type: "mafia_chat",
+				Payload: ChatMessage{
+					Sender: sender,
+					Text:   text,
+					Time:   time.Now().Format("15:04"),
+				},
+			})
+		}
+	}
 }
