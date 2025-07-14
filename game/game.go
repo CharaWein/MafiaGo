@@ -531,8 +531,10 @@ func (g *Game) SetReadyStatus(playerID string, ready bool) {
 	}
 }
 
-func (g *Game) BroadcastPlayersUpdate() {
+func (g *Game) GetPlayersList() []PlayerInfo {
 	g.Mu.Lock()
+	defer g.Mu.Unlock()
+
 	players := make([]PlayerInfo, 0, len(g.Players))
 	for _, p := range g.Players {
 		players = append(players, PlayerInfo{
@@ -541,8 +543,11 @@ func (g *Game) BroadcastPlayersUpdate() {
 			Ready: p.Ready,
 		})
 	}
-	g.Mu.Unlock()
+	return players
+}
 
+func (g *Game) BroadcastPlayersUpdate() {
+	players := g.GetPlayersList()
 	msg := Message{
 		Type: "players_update",
 		Payload: map[string]interface{}{
@@ -550,7 +555,5 @@ func (g *Game) BroadcastPlayersUpdate() {
 			"canStart": g.CanStartGame(),
 		},
 	}
-
 	g.Broadcast(msg)
-	log.Printf("Broadcasting players update: %+v", msg) // Добавляем лог
 }

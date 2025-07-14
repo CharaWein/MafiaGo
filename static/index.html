@@ -1,65 +1,7 @@
-<!DOCTYPE html>
-<html lang="ru">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Онлайн Мафия</title>
-    <link rel="stylesheet" href="/style.css">
-</head>
-<body>
-    <div class="container">
-        <h1>Онлайн Мафия</h1>
-        
-        <!-- Стартовый экран -->
-        <div id="start-screen">
-            <div class="input-group">
-                <input type="text" id="player-name-input" placeholder="Ваше имя" required>
-            </div>
-            
-            <div class="actions">
-                <button id="create-game-btn">Создать игру</button>
-                
-                <div class="join-section">
-                    <input type="text" id="game-id-input" placeholder="ID игры">
-                    <button id="join-game-btn">Присоединиться</button>
-                </div>
-            </div>
-        </div>
-        
-        <!-- Лобби (скрыто изначально) -->
-        <div id="lobby-screen" class="hidden">
-            <h2>Ожидание игроков</h2>
-            <div class="game-id-display">ID комнаты: <span id="game-id-display"></span></div>
-            
-            <div id="players-list" class="players-list">
+<div id="lobby-screen">
+    <div id="players-list"></div>
+    <button id="ready-btn">Готов</button>
+    <button id="start-game-btn" class="hidden">Начать игру</button>
+</div>
 
-            </div>
-             <div class="lobby-actions">
-                <button id="ready-btn">Готов</button>
-                <button id="start-game-btn" class="host-only hidden">Начать игру</button>
-            </div>
-        </div>
-        
-        <!-- Игровой экран (скрыт изначально) -->
-        <div id="game-screen" class="hidden">
-            <!-- Игровой интерфейс -->
-        </div>
-    </div>
-    
-    <script src="/game.js"></script>
-<script>
-// Временный код для отладки
-function debugWebSocket() {
-    if (!window.game || !window.game.socket) {
-        console.log("Game not initialized");
-        return;
-    }
-    
-    console.log("WebSocket state:", window.game.socket.readyState);
-    console.log("Current players:", window.game.players);
-    console.log("My ready status:", window.game.playerReady);
-}
-setInterval(debugWebSocket, 5000);
-</script>
-</body>
-</html>
+<script src="/game.js"></script>
