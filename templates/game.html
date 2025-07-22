@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Игра MafiaGo</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Комната: <span id="roomID">{{.RoomID}}</span></h1>
+        <h2>Ваш ник: <span id="nickname">{{.Nickname}}</span></h2>
+        
+        <div id="players" class="players-list"></div>
+        
+        <button id="readyBtn" class="ready-btn">Готов</button>
+    </div>
+
+    <script>
+        const socket = new WebSocket(`ws://${window.location.host}/ws?roomID=${encodeURIComponent("{{.RoomID}}")}&nickname=${encodeURIComponent("{{.Nickname}}")}`);
+        const playersDiv = document.getElementById("players");
+        const readyBtn = document.getElementById("readyBtn");
+        
+        let isReady = false;
+        
+        readyBtn.addEventListener("click", () => {
+            isReady = !isReady;
+            readyBtn.textContent = isReady ? "Не готов" : "Готов";
+            socket.send(JSON.stringify({ ready: isReady }));
+        });
+        
+        socket.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+            if (data.type === "players_update") {
+                playersDiv.innerHTML = "";
+                data.players.forEach(player => {
+                    const playerDiv = document.createElement("div");
+                    playerDiv.className = "player";
+                    playerDiv.innerHTML = `
+                        <span class="player-name">${player.nickname}</span>
+                        <span class="player-status ${player.ready ? 'ready' : 'not-ready'}">
+                            ${player.ready ? '✓ Готов' : '✗ Не готов'}
+                        </span>
+                    `;
+                    playersDiv.appendChild(playerDiv);
+                });
+            }
+        };
+    </script>
+</body>
+</html>

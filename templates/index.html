@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>MafiaGo</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Добро пожаловать в MafiaGo!</h1>
+        <form id="joinForm">
+            <input type="text" id="nickname" placeholder="Ваш ник" required>
+            <input type="text" id="roomID" placeholder="ID комнаты (оставьте пустым для создания новой)">
+            <button type="submit">Присоединиться</button>
+        </form>
+    </div>
+
+    <script>
+        document.getElementById("joinForm").addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const nickname = document.getElementById("nickname").value;
+            const roomID = document.getElementById("roomID").value;
+            
+            if (!roomID) {
+                const response = await fetch("/create");
+                const data = await response.json();
+                window.location.href = `/game?roomID=${data.roomID}&nickname=${encodeURIComponent(nickname)}`;
+            } else {
+                window.location.href = `/game?roomID=${roomID}&nickname=${encodeURIComponent(nickname)}`;
+            }
+        });
+    </script>
+</body>
+</html>
