@@ -2,47 +2,127 @@
 <html>
 <head>
     <title>Игра MafiaGo</title>
-    <link rel="stylesheet" href="/static/style.css">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+        }
+        .player-list {
+            margin: 20px 0;
+        }
+        .player {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+        }
+        .player-name {
+            font-weight: bold;
+        }
+        .player-status {
+            padding: 2px 8px;
+            border-radius: 4px;
+        }
+        .ready {
+            background-color: #dff0d8;
+            color: #3c763d;
+        }
+        .not-ready {
+            background-color: #f2dede;
+            color: #a94442;
+        }
+        .ready-btn {
+            padding: 10px 20px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        .ready-btn:hover {
+            background-color: #45a049;
+        }
+    </style>
 </head>
 <body>
     <div class="container">
         <h1>Комната: <span id="roomID">{{.RoomID}}</span></h1>
         <h2>Ваш ник: <span id="nickname">{{.Nickname}}</span></h2>
         
-        <div id="players" class="players-list"></div>
+        <div class="player-list" id="players">
+            <!-- Список игроков будет здесь -->
+        </div>
         
-        <button id="readyBtn" class="ready-btn">Готов</button>
+        <button id="readyBtn" class="ready-btn">Не готов</button>
     </div>
 
     <script>
+        // Подключаемся к WebSocket с использованием WSS (обязательно для Render)
         const socket = new WebSocket(`wss://${window.location.host}/ws?roomID=${encodeURIComponent("{{.RoomID}}")}&nickname=${encodeURIComponent("{{.Nickname}}")}`);
+        
         const playersDiv = document.getElementById("players");
         const readyBtn = document.getElementById("readyBtn");
-        
         let isReady = false;
-        
+
+        // Обработчик кнопки готовности
         readyBtn.addEventListener("click", () => {
             isReady = !isReady;
-            readyBtn.textContent = isReady ? "Не готов" : "Готов";
-            socket.send(JSON.stringify({ ready: isReady }));
+            readyBtn.textContent = isReady ? "Готов" : "Не готов";
+            readyBtn.style.backgroundColor = isReady ? "#4CAF50" : "#f44336";
+            
+            // Отправляем статус готовности на сервер
+            socket.send(JSON.stringify({
+                type: "player_ready",
+                ready: isReady
+            }));
         });
-        
+
+        // Обработчик сообщений от сервера
         socket.onmessage = (event) => {
             const data = JSON.parse(event.data);
+            
             if (data.type === "players_update") {
+                // Обновляем список игроков
                 playersDiv.innerHTML = "";
+                
                 data.players.forEach(player => {
-                    const playerDiv = document.createElement("div");
-                    playerDiv.className = "player";
-                    playerDiv.innerHTML = `
+                    const playerElement = document.createElement("div");
+                    playerElement.className = "player";
+                    
+                    playerElement.innerHTML = `
                         <span class="player-name">${player.nickname}</span>
                         <span class="player-status ${player.ready ? 'ready' : 'not-ready'}">
                             ${player.ready ? '✓ Готов' : '✗ Не готов'}
                         </span>
                     `;
-                    playersDiv.appendChild(playerDiv);
+                    
+                    playersDiv.appendChild(playerElement);
                 });
             }
+        };
+
+        // Обработчик ошибок соединения
+        socket.onerror = (error) => {
+            console.error("WebSocket error:", error);
+            alert("Произошла ошибка соединения. Пожалуйста, обновите страницу.");
+        };
+
+        // При закрытии соединения
+        socket.onclose = () => {
+            console.log("WebSocket connection closed");
         };
     </script>
 </body>
