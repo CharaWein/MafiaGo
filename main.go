@@ -56,13 +56,24 @@ func handleIndex(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleCreateRoom(w http.ResponseWriter, r *http.Request) {
-	roomID := uuid.New().String()
-	roomsMu.Lock()
-	rooms[roomID] = &Room{
-		ID:      roomID,
-		Players: make(map[string]*Player),
+	roomID := r.URL.Query().Get("roomID")
+
+	// Если roomID не указан, создаём новую комнату
+	if roomID == "" {
+		roomID = uuid.New().String()
 	}
-	roomsMu.Unlock()
+
+	roomsMu.Lock()
+	defer roomsMu.Unlock()
+
+	// Если комната уже существует, просто возвращаем её ID
+	if _, exists := rooms[roomID]; !exists {
+		rooms[roomID] = &Room{
+			ID:      roomID,
+			Players: make(map[string]*Player),
+		}
+	}
+
 	json.NewEncoder(w).Encode(map[string]string{"roomID": roomID})
 }
 
@@ -94,8 +105,14 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Добавление игрока
+	// Добавляем игрока в комнату
 	room.mu.Lock()
+	if _, playerExists := room.Players[nickname]; playerExists {
+		conn.WriteMessage(websocket.TextMessage, []byte(`{"error":"Nickname already in use"}`))
+		room.mu.Unlock()
+		return
+	}
+
 	room.Players[nickname] = &Player{
 		Nickname: nickname,
 		Ready:    false,
@@ -105,7 +122,6 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 	broadcastPlayers(room)
 
-	// Обработка сообщений
 	for {
 		_, msg, err := conn.ReadMessage()
 		if err != nil {
@@ -116,11 +132,14 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 		var data map[string]interface{}
 		if err := json.Unmarshal(msg, &data); err == nil {
-			if ready, ok := data["ready"].(bool); ok {
-				room.mu.Lock()
-				room.Players[nickname].Ready = ready
-				room.mu.Unlock()
-				broadcastPlayers(room)
+			switch data["type"] {
+			case "player_ready":
+				if ready, ok := data["ready"].(bool); ok {
+					room.mu.Lock()
+					room.Players[nickname].Ready = ready
+					room.mu.Unlock()
+					broadcastPlayers(room)
+				}
 			}
 		}
 	}
