@@ -67,6 +67,15 @@
         </div>
         
         <button id="readyBtn" class="ready-btn">Не готов</button>
+
+        <div id="gameControls" style="display: none;">
+            <button id="startGameBtn" class="start-btn">Начать игру</button>
+        </div>
+
+        <div id="roleInfo" style="display: none;">
+            <h3>Ваша роль: <span id="playerRole"></span></h3>
+            <div id="roleDescription"></div>
+        </div>
     </div>
 
     <script>
@@ -124,6 +133,84 @@
         socket.onclose = () => {
             console.log("WebSocket connection closed");
         };
+
+        socket.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+            
+            if (data.type === "players_update") {
+                // Обновляем список игроков
+                updatePlayersList(data.players);
+                
+                // Показываем/скрываем кнопку старта
+                const gameControls = document.getElementById("gameControls");
+                const startBtn = document.getElementById("startGameBtn");
+                
+                if (data.canStart && "{{.Nickname}}" === data.players.find(p => p.isCreator)?.nickname) {
+                    gameControls.style.display = "block";
+                    startBtn.onclick = () => {
+                        socket.send(JSON.stringify({ type: "start_game" }));
+                    };
+                } else {
+                    gameControls.style.display = "none";
+                }
+                
+                if (data.gameStarted) {
+                    // Переходим на экран игры
+                    window.location.href = `/play?roomID=${encodeURIComponent("{{.RoomID}}")}&nickname=${encodeURIComponent("{{.Nickname}}")}`;
+                }
+            }
+
+            if (data.type === "game_started") {
+                document.getElementById("roleInfo").style.display = "block";
+                document.getElementById("playerRole").textContent = getRoleName(data.role);
+                document.getElementById("roleDescription").innerHTML = getRoleDescription(data.role);
+                
+                // Скрываем лобби
+                document.querySelector(".lobby-container").style.display = "none";
+            }
+        };
+
+        function updatePlayersList(players) {
+            const playersDiv = document.getElementById("players");
+            playersDiv.innerHTML = "";
+            
+            players.forEach(player => {
+                const playerElement = document.createElement("div");
+                playerElement.className = "player";
+                
+                playerElement.innerHTML = `
+                    <span class="player-name">
+                        ${player.nickname} 
+                        ${player.isCreator ? '👑' : ''}
+                    </span>
+                    <span class="player-status ${player.ready ? 'ready' : 'not-ready'}">
+                        ${player.ready ? '✓ Готов' : '✗ Не готов'}
+                    </span>
+                `;
+                
+                playersDiv.appendChild(playerElement);
+            });
+        }
+
+        function getRoleName(role) {
+            const roles = {
+                "mafia_don": "Дон мафии",
+                "mafia": "Мафия",
+                "sheriff": "Шериф",
+                "civilian": "Мирный житель"
+            };
+            return roles[role] || role;
+        }
+        
+        function getRoleDescription(role) {
+            const descriptions = {
+                "mafia_don": "Вы глава мафии. Ночью вы просыпаетесь вместе с мафией и принимаете окончательное решение об убийстве.",
+                "mafia": "Вы член мафии. Ночью вы просыпаетесь и выбираете жертву вместе с другими мафиози.",
+                "sheriff": "Вы шериф. Ночью вы можете проверить одного игрока на принадлежность к мафии.",
+                "civilian": "Вы мирный житель. Ваша цель - вычислить и линчевать всех мафиози."
+            };
+            return descriptions[role] || "Описание роли отсутствует";
+        }
     </script>
 </body>
 </html>

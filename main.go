@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"html/template"
 	"log"
+	"math/rand/v2"
 	"net/http"
 	"path/filepath"
 	"sync"
@@ -16,12 +17,18 @@ type Player struct {
 	Nickname string
 	Ready    bool
 	Conn     *websocket.Conn
+	Role     string // Добавляем поле Role
+	Alive    bool
 }
 
 type Room struct {
-	ID      string
-	Players map[string]*Player
-	mu      sync.Mutex
+	ID          string
+	Players     map[string]*Player
+	Creator     string
+	GameStarted bool
+	GamePhase   string // "night", "day", "voting"
+	DayNumber   int
+	mu          sync.Mutex
 }
 
 var rooms = make(map[string]*Room)
@@ -56,23 +63,16 @@ func handleIndex(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleCreateRoom(w http.ResponseWriter, r *http.Request) {
-	roomID := r.URL.Query().Get("roomID")
-
-	// Если roomID не указан, создаём новую комнату
-	if roomID == "" {
-		roomID = uuid.New().String()
-	}
+	nickname := r.URL.Query().Get("nickname")
+	roomID := uuid.New().String()
 
 	roomsMu.Lock()
-	defer roomsMu.Unlock()
-
-	// Если комната уже существует, просто возвращаем её ID
-	if _, exists := rooms[roomID]; !exists {
-		rooms[roomID] = &Room{
-			ID:      roomID,
-			Players: make(map[string]*Player),
-		}
+	rooms[roomID] = &Room{
+		ID:      roomID,
+		Players: make(map[string]*Player),
+		Creator: nickname,
 	}
+	roomsMu.Unlock()
 
 	json.NewEncoder(w).Encode(map[string]string{"roomID": roomID})
 }
@@ -134,11 +134,14 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 		if err := json.Unmarshal(msg, &data); err == nil {
 			switch data["type"] {
 			case "player_ready":
-				if ready, ok := data["ready"].(bool); ok {
+				// ... существующий код ...
+			case "start_game":
+				if nickname == room.Creator {
 					room.mu.Lock()
-					room.Players[nickname].Ready = ready
+					room.GameStarted = true
 					room.mu.Unlock()
 					broadcastPlayers(room)
+					startGame(room) // Новая функция для начала игры
 				}
 			}
 		}
@@ -150,16 +153,28 @@ func broadcastPlayers(room *Room) {
 	defer room.mu.Unlock()
 
 	players := make([]map[string]interface{}, 0)
+	allReady := true
+	readyCount := 0
+
 	for _, p := range room.Players {
 		players = append(players, map[string]interface{}{
-			"nickname": p.Nickname,
-			"ready":    p.Ready,
+			"nickname":  p.Nickname,
+			"ready":     p.Ready,
+			"isCreator": p.Nickname == room.Creator,
 		})
+
+		if p.Ready {
+			readyCount++
+		} else {
+			allReady = false
+		}
 	}
 
 	msg, _ := json.Marshal(map[string]interface{}{
-		"type":    "players_update",
-		"players": players,
+		"type":        "players_update",
+		"players":     players,
+		"canStart":    allReady && readyCount >= 4 && !room.GameStarted,
+		"gameStarted": room.GameStarted,
 	})
 
 	for _, p := range room.Players {
@@ -178,4 +193,98 @@ func renderTemplate(w http.ResponseWriter, tmpl string, data interface{}) {
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
+}
+
+func startGame(room *Room) {
+	// Подготовка списка игроков
+	players := make([]*Player, 0, len(room.Players))
+	for _, p := range room.Players {
+		p.Alive = true // Все живы в начале игры
+		players = append(players, p)
+	}
+
+	// Раздаем роли
+	assignRoles(players)
+
+	// Отправляем роли игрокам
+	room.mu.Lock()
+	defer room.mu.Unlock()
+
+	for _, p := range room.Players {
+		msg, _ := json.Marshal(map[string]interface{}{
+			"type":         "game_started",
+			"role":         p.Role,
+			"playersCount": len(room.Players),
+		})
+		p.Conn.WriteMessage(websocket.TextMessage, msg)
+	}
+
+	// Начинаем первую ночь
+	startNightPhase(room)
+}
+
+func assignRoles(players []*Player) {
+	count := len(players)
+	if count < 4 {
+		return // Недостаточно игроков
+	}
+
+	// Количество мафий (без дона)
+	mafiaCount := (count - 5) / 2
+	if mafiaCount < 1 {
+		mafiaCount = 1
+	}
+
+	// Дон мафии
+	players[0].Role = "mafia_don"
+
+	// Простые мафии
+	for i := 1; i <= mafiaCount; i++ {
+		players[i].Role = "mafia"
+	}
+
+	// Шериф
+	players[mafiaCount+1].Role = "sheriff"
+
+	// Остальные - мирные жители
+	for i := mafiaCount + 2; i < count; i++ {
+		players[i].Role = "civilian"
+	}
+
+	// Перемешиваем роли
+	rand.Shuffle(len(players), func(i, j int) {
+		players[i], players[j] = players[j], players[i]
+	})
+}
+
+func startNightPhase(room *Room) {
+	// Отправляем сообщения в зависимости от роли
+	for _, p := range room.Players {
+		var msg []byte
+
+		switch p.Role {
+		case "mafia", "mafia_don":
+			msg, _ = json.Marshal(map[string]interface{}{
+				"type":    "night_start",
+				"phase":   "mafia",
+				"message": "Выберите жертву для убийства",
+			})
+		case "sheriff":
+			msg, _ = json.Marshal(map[string]interface{}{
+				"type":    "night_start",
+				"phase":   "sheriff",
+				"message": "Выберите игрока для проверки",
+			})
+		default:
+			msg, _ = json.Marshal(map[string]interface{}{
+				"type":    "night_start",
+				"phase":   "sleep",
+				"message": "Ночь. Вы спите...",
+			})
+		}
+
+		p.Conn.WriteMessage(websocket.TextMessage, msg)
+	}
+
+	// Можно добавить таймер для автоматического завершения фазы
 }
