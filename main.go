@@ -158,16 +158,17 @@ func broadcastPlayers(room *Room) {
 	room.mu.Lock()
 	defer room.mu.Unlock()
 
-	players := make([]map[string]interface{}, 0)
+	playersList := make([]map[string]interface{}, 0)
 	allReady := true
 	readyCount := 0
 
 	for _, p := range room.Players {
-		players = append(players, map[string]interface{}{
+		playerData := map[string]interface{}{
 			"nickname":  p.Nickname,
 			"ready":     p.Ready,
 			"isCreator": p.Nickname == room.Creator,
-		})
+		}
+		playersList = append(playersList, playerData)
 
 		if p.Ready {
 			readyCount++
@@ -176,13 +177,12 @@ func broadcastPlayers(room *Room) {
 		}
 	}
 
-	canStart := allReady && len(players) >= 4 && !room.GameStarted
+	canStart := allReady && len(playersList) >= 4 && !room.GameStarted
 
 	msg, _ := json.Marshal(map[string]interface{}{
-		"type":        "players_update",
-		"players":     players,
-		"canStart":    canStart,
-		"gameStarted": room.GameStarted,
+		"type":     "players_update",
+		"players":  playersList,
+		"canStart": canStart,
 	})
 
 	for _, p := range room.Players {
