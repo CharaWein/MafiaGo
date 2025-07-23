@@ -70,33 +70,23 @@
         let isReady = false;
         let amICreator = false;
 
-        // Обработчик входящих сообщений
         socket.onmessage = function(event) {
             const data = JSON.parse(event.data);
             
             if (data.type === "players_update") {
                 updatePlayersList(data.players);
                 
-                // Проверяем, являемся ли мы создателем
-                amICreator = data.players.some(p => p.nickname === "{{.Nickname}}" && p.isCreator);
+                // Исправленное сравнение никнеймов
+                const currentNickname = document.getElementById("nickname").textContent;
+                amICreator = data.players.some(p => p.nickname === currentNickname && p.isCreator);
                 
-                // Проверяем условия для кнопки "Начать игру"
-                const allReady = data.players.every(p => p.ready);
-                const enoughPlayers = data.players.length >= 4;
-                
-                // Показываем кнопку только если:
-                // 1. Мы создатель
-                // 2. Все готовы
-                // 3. Игроков >=4
-                if (amICreator && allReady && enoughPlayers) {
-                    document.getElementById("startGameBtn").style.display = "block";
-                } else {
-                    document.getElementById("startGameBtn").style.display = "none";
-                }
+                // Исправленное условие для кнопки
+                const shouldShowStartBtn = amICreator && data.canStart;
+                document.getElementById("startGameBtn").style.display = 
+                    shouldShowStartBtn ? "block" : "none";
             }
         };
 
-        // Обновление списка игроков
         function updatePlayersList(players) {
             const playersList = document.getElementById("playersList");
             playersList.innerHTML = "";
@@ -105,6 +95,7 @@
                 const playerElement = document.createElement("div");
                 playerElement.className = "player";
                 
+                // Исправленное отображение короны
                 playerElement.innerHTML = `
                     <span>
                         ${player.nickname}

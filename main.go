@@ -75,7 +75,7 @@ func handleCreateRoom(w http.ResponseWriter, r *http.Request) {
 	rooms[roomID] = &Room{
 		ID:      roomID,
 		Players: make(map[string]*Player),
-		Creator: nickname,
+		Creator: nickname, // Это должно быть установлено
 	}
 	roomsMu.Unlock()
 

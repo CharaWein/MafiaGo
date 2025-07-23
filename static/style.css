@@ -1,75 +1,5 @@
-body {
-    font-family: Arial, sans-serif;
-    background-color: #f5f5f5;
-    margin: 0;
-    padding: 20px;
-}
-
-.container {
-    max-width: 800px;
-    margin: 0 auto;
-    background: white;
-    padding: 20px;
-    border-radius: 8px;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-}
-
-input, button {
-    padding: 10px;
-    margin: 5px 0;
-    border: 1px solid #ddd;
-    border-radius: 4px;
-}
-
-button {
-    background-color: #4CAF50;
-    color: white;
-    cursor: pointer;
-    border: none;
-}
-
-button:hover {
-    background-color: #45a049;
-}
-
-.players-list {
-    margin: 20px 0;
-}
-
-.player {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 10px;
-    border-bottom: 1px solid #eee;
-}
-
-.player-name {
-    font-weight: bold;
-}
-
-.player-status {
-    padding: 5px 10px;
-    border-radius: 4px;
-}
-
-.ready {
-    background-color: #dff0d8;
-    color: #3c763d;
-}
-
-.not-ready {
-    background-color: #f2dede;
-    color: #a94442;
-}
-
-.ready-btn {
-    padding: 10px 20px;
-    font-size: 16px;
-    margin-top: 20px;
-}
-
 .start-btn {
+    display: none;
     padding: 12px 24px;
     background-color: #2196F3;
     color: white;
@@ -82,22 +12,7 @@ button:hover {
 .start-btn:hover {
     background-color: #0b7dda;
 }
-.start-btn:disabled {
-    background-color: #cccccc;
-    cursor: not-allowed;
-}
-.creator-icon {
+.creator-crown {
     color: gold;
     margin-left: 5px;
-}
-.start-btn {
-    display: none;
-    padding: 10px 20px;
-    background-color: #2196F3;
-    color: white;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 16px;
-    margin-top: 20px;
 }
