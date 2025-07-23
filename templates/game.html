@@ -58,159 +58,67 @@
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>Комната: <span id="roomID">{{.RoomID}}</span></h1>
-        <h2>Ваш ник: <span id="nickname">{{.Nickname}}</span></h2>
-        
-        <div class="player-list" id="players">
-            <!-- Список игроков будет здесь -->
-        </div>
-        
-        <button id="readyBtn" class="ready-btn">Не готов</button>
+    <div class="gameContainer">
+        <div id="lobbyView">
+            <h1>Комната: <span id="roomID">{{.RoomID}}</span></h1>
+            <h2>Ваш ник: <span id="nickname">{{.Nickname}}</span></h2>
+            
+            <div class="player-list" id="players">
+                <!-- Список игроков будет здесь -->
+            </div>
+            
+            <button id="readyBtn" class="ready-btn">Не готов</button>
 
-        <div id="gameControls" style="display: none;">
-            <button id="startGameBtn" class="start-btn">Начать игру</button>
+            <div id="gameControls" style="display: none;">
+                <button id="startGameBtn" class="start-btn">Начать игру</button>
+            </div>
         </div>
 
-        <div id="roleInfo" style="display: none;">
-            <h3>Ваша роль: <span id="playerRole"></span></h3>
-            <div id="roleDescription"></div>
+        <div id="roleView" style="display: none;">
+            <h2>Ваша роль: <span id="playerRole"></span></h2>
+            <p id="roleDescription"></p>
+            <div id="gamePhase"></div>
+            <div id="playersList"></div>
         </div>
     </div>
 
     <script>
-        // Подключаемся к WebSocket с использованием WSS (обязательно для Render)
-        const socket = new WebSocket(`wss://${window.location.host}/ws?roomID=${encodeURIComponent("{{.RoomID}}")}&nickname=${encodeURIComponent("{{.Nickname}}")}`);
-        
-        const playersDiv = document.getElementById("players");
-        const readyBtn = document.getElementById("readyBtn");
-        let isReady = false;
-
-        // Обработчик кнопки готовности
-        readyBtn.addEventListener("click", () => {
-            isReady = !isReady;
-            readyBtn.textContent = isReady ? "Готов" : "Не готов";
-            readyBtn.style.backgroundColor = isReady ? "#4CAF50" : "#f44336";
-            
-            // Отправляем статус готовности на сервер
-            socket.send(JSON.stringify({
-                type: "player_ready",
-                ready: isReady
-            }));
-        });
-
-        // Обработчик сообщений от сервера
         socket.onmessage = (event) => {
             const data = JSON.parse(event.data);
             
-            if (data.type === "players_update") {
-                // Обновляем список игроков
-                playersDiv.innerHTML = "";
-                
-                data.players.forEach(player => {
-                    const playerElement = document.createElement("div");
-                    playerElement.className = "player";
-                    
-                    playerElement.innerHTML = `
-                        <span class="player-name">${player.nickname}</span>
-                        <span class="player-status ${player.ready ? 'ready' : 'not-ready'}">
-                            ${player.ready ? '✓ Готов' : '✗ Не готов'}
-                        </span>
-                    `;
-                    
-                    playersDiv.appendChild(playerElement);
-                });
-            }
-        };
-
-        // Обработчик ошибок соединения
-        socket.onerror = (error) => {
-            console.error("WebSocket error:", error);
-            alert("Произошла ошибка соединения. Пожалуйста, обновите страницу.");
-        };
-
-        // При закрытии соединения
-        socket.onclose = () => {
-            console.log("WebSocket connection closed");
-        };
-
-        socket.onmessage = (event) => {
-            const data = JSON.parse(event.data);
-            
-            if (data.type === "players_update") {
-                // Обновляем список игроков
-                updatePlayersList(data.players);
-                
-                // Показываем/скрываем кнопку старта
-                const gameControls = document.getElementById("gameControls");
-                const startBtn = document.getElementById("startGameBtn");
-                
-                if (data.canStart && "{{.Nickname}}" === data.players.find(p => p.isCreator)?.nickname) {
-                    gameControls.style.display = "block";
-                    startBtn.onclick = () => {
-                        socket.send(JSON.stringify({ type: "start_game" }));
-                    };
-                } else {
-                    gameControls.style.display = "none";
-                }
-                
-                if (data.gameStarted) {
-                    // Переходим на экран игры
-                    window.location.href = `/play?roomID=${encodeURIComponent("{{.RoomID}}")}&nickname=${encodeURIComponent("{{.Nickname}}")}`;
-                }
-            }
-
             if (data.type === "game_started") {
-                document.getElementById("roleInfo").style.display = "block";
-                document.getElementById("playerRole").textContent = getRoleName(data.role);
-                document.getElementById("roleDescription").innerHTML = getRoleDescription(data.role);
+                document.getElementById("lobbyView").style.display = "none";
+                document.getElementById("roleView").style.display = "block";
                 
-                // Скрываем лобби
-                document.querySelector(".lobby-container").style.display = "none";
+                const roleNames = {
+                    "mafia_don": "Дон мафии",
+                    "mafia": "Мафия",
+                    "sheriff": "Шериф",
+                    "civilian": "Мирный житель"
+                };
+                
+                const roleDescriptions = {
+                    "mafia_don": `Вы глава мафии. В игре ${data.mafiaCount} мафиози (включая вас). 
+                                Ночью вы принимаете окончательное решение об убийстве.`,
+                    "mafia": `Вы член мафии. В игре ${data.mafiaCount} мафиози. 
+                            Ночью вы просыпаетесь и выбираете жертву вместе с Доном.`,
+                    "sheriff": "Вы шериф. Ночью вы можете проверить одного игрока на принадлежность к мафии.",
+                    "civilian": `Вы мирный житель. В игре ${data.mafiaCount} мафиози. 
+                                Ваша цель - вычислить и линчевать всех мафиози.`
+                };
+                
+                document.getElementById("playerRole").textContent = roleNames[data.role];
+                document.getElementById("roleDescription").textContent = roleDescriptions[data.role];
             }
-        };
-
-        function updatePlayersList(players) {
-            const playersDiv = document.getElementById("players");
-            playersDiv.innerHTML = "";
-            
-            players.forEach(player => {
-                const playerElement = document.createElement("div");
-                playerElement.className = "player";
-                
-                playerElement.innerHTML = `
-                    <span class="player-name">
-                        ${player.nickname} 
-                        ${player.isCreator ? '👑' : ''}
-                    </span>
-                    <span class="player-status ${player.ready ? 'ready' : 'not-ready'}">
-                        ${player.ready ? '✓ Готов' : '✗ Не готов'}
-                    </span>
+            else if (data.type === "night_start") {
+                document.getElementById("gamePhase").innerHTML = `
+                    <h3>Ночь ${data.dayNumber}</h3>
+                    <p>${data.message}</p>
                 `;
                 
-                playersDiv.appendChild(playerElement);
-            });
-        }
-
-        function getRoleName(role) {
-            const roles = {
-                "mafia_don": "Дон мафии",
-                "mafia": "Мафия",
-                "sheriff": "Шериф",
-                "civilian": "Мирный житель"
-            };
-            return roles[role] || role;
-        }
-        
-        function getRoleDescription(role) {
-            const descriptions = {
-                "mafia_don": "Вы глава мафии. Ночью вы просыпаетесь вместе с мафией и принимаете окончательное решение об убийстве.",
-                "mafia": "Вы член мафии. Ночью вы просыпаетесь и выбираете жертву вместе с другими мафиози.",
-                "sheriff": "Вы шериф. Ночью вы можете проверить одного игрока на принадлежность к мафии.",
-                "civilian": "Вы мирный житель. Ваша цель - вычислить и линчевать всех мафиози."
-            };
-            return descriptions[role] || "Описание роли отсутствует";
-        }
+                // Здесь можно добавить логику для взаимодействия в зависимости от фазы
+            }
+        };
     </script>
 </body>
 </html>
