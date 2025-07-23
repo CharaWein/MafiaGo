@@ -176,7 +176,7 @@ func broadcastPlayers(room *Room) {
 		}
 	}
 
-	canStart := allReady && readyCount >= 4 && !room.GameStarted
+	canStart := allReady && len(players) >= 4 && !room.GameStarted
 
 	msg, _ := json.Marshal(map[string]interface{}{
 		"type":        "players_update",
