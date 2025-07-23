@@ -34,16 +34,6 @@
             color: gold;
             margin-left: 5px;
         }
-        #startGameBtn {
-            display: none;
-            padding: 10px 20px;
-            background: #4CAF50;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            margin-top: 20px;
-            cursor: pointer;
-        }
         #readyBtn {
             padding: 10px 20px;
             background: #2196F3;
@@ -51,6 +41,16 @@
             border: none;
             border-radius: 4px;
             cursor: pointer;
+        }
+        #startGameBtn {
+            padding: 10px 20px;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            margin-top: 10px;
+            cursor: pointer;
+            display: none; /* По умолчанию скрыта */
         }
     </style>
 </head>
@@ -66,27 +66,34 @@
     </div>
 
     <script>
+        // Подключение WebSocket
         const socket = new WebSocket(`wss://${window.location.host}/ws?roomID=${encodeURIComponent("{{.RoomID}}")}&nickname=${encodeURIComponent("{{.Nickname}}")}`);
         let isReady = false;
         let amICreator = false;
 
+        // Обработчик сообщений от сервера
         socket.onmessage = function(event) {
             const data = JSON.parse(event.data);
             
             if (data.type === "players_update") {
+                // Обновляем список игроков
                 updatePlayersList(data.players);
                 
-                // Исправленное сравнение никнеймов
-                const currentNickname = document.getElementById("nickname").textContent;
+                // Проверяем, является ли текущий игрок создателем
+                const currentNickname = "{{.Nickname}}";
                 amICreator = data.players.some(p => p.nickname === currentNickname && p.isCreator);
                 
-                // Исправленное условие для кнопки
+                // Показываем кнопку только если:
+                // 1. Это создатель комнаты
+                // 2. Все игроки готовы
+                // 3. Игроков 4 или больше
                 const shouldShowStartBtn = amICreator && data.canStart;
                 document.getElementById("startGameBtn").style.display = 
                     shouldShowStartBtn ? "block" : "none";
             }
         };
 
+        // Обновление списка игроков
         function updatePlayersList(players) {
             const playersList = document.getElementById("playersList");
             playersList.innerHTML = "";
@@ -95,7 +102,6 @@
                 const playerElement = document.createElement("div");
                 playerElement.className = "player";
                 
-                // Исправленное отображение короны
                 playerElement.innerHTML = `
                     <span>
                         ${player.nickname}
@@ -128,6 +134,16 @@
                 type: "start_game"
             }));
         });
+
+        // Обработчик ошибок
+        socket.onerror = function(error) {
+            console.error("WebSocket error:", error);
+        };
+
+        // Обработчик закрытия соединения
+        socket.onclose = function() {
+            console.log("WebSocket connection closed");
+        };
     </script>
 </body>
 </html>

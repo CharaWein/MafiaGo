@@ -166,7 +166,7 @@ func broadcastPlayers(room *Room) {
 		playerData := map[string]interface{}{
 			"nickname":  p.Nickname,
 			"ready":     p.Ready,
-			"isCreator": p.Nickname == room.Creator,
+			"isCreator": p.Nickname == room.Creator, // Важно: правильно устанавливаем isCreator
 		}
 		playersList = append(playersList, playerData)
 
@@ -177,6 +177,10 @@ func broadcastPlayers(room *Room) {
 		}
 	}
 
+	// Условия для canStart:
+	// 1. Все игроки готовы
+	// 2. Игроков 4 или больше
+	// 3. Игра еще не начата
 	canStart := allReady && len(playersList) >= 4 && !room.GameStarted
 
 	msg, _ := json.Marshal(map[string]interface{}{
