@@ -71,7 +71,8 @@ func handleCreateRoom(w http.ResponseWriter, r *http.Request) {
 	nickname := r.URL.Query().Get("nickname")
 	roomID := uuid.New().String()
 
-	log.Printf("CREATING ROOM: ID=%s, Creator=%s", roomID, nickname)
+	// Логируем создание комнаты
+	log.Printf("Creating new room: ID=%s, Creator=%s", roomID, nickname)
 
 	roomsMu.Lock()
 	rooms[roomID] = &Room{
@@ -165,9 +166,8 @@ func broadcastPlayers(room *Room) {
 
 	for _, p := range room.Players {
 		playerData := map[string]interface{}{
-			"nickname":  p.Nickname,
-			"ready":     p.Ready,
-			"isCreator": p.Nickname == room.Creator,
+			"nickname": p.Nickname,
+			"ready":    p.Ready,
 		}
 		playersList = append(playersList, playerData)
 
@@ -178,20 +178,20 @@ func broadcastPlayers(room *Room) {
 
 	canStart := allReady && len(playersList) >= 4 && !room.GameStarted
 
-	// Явно добавляем поле creator с ником создателя
-	msg, _ := json.Marshal(map[string]interface{}{
+	// Явно создаем сообщение с creator
+	msg := map[string]interface{}{
 		"type":        "players_update",
 		"players":     playersList,
 		"canStart":    canStart,
-		"creator":     room.Creator, // Это ключевое изменение!
+		"creator":     room.Creator, // Важно: передаем создателя
 		"gameStarted": room.GameStarted,
-	})
+	}
 
-	log.Printf("Broadcasting to room %s: creator=%s, players=%d",
-		room.ID, room.Creator, len(playersList))
+	log.Printf("Broadcasting: %+v", msg) // Логируем отправляемое сообщение
 
+	msgBytes, _ := json.Marshal(msg)
 	for _, p := range room.Players {
-		if err := p.Conn.WriteMessage(websocket.TextMessage, msg); err != nil {
+		if err := p.Conn.WriteMessage(websocket.TextMessage, msgBytes); err != nil {
 			log.Printf("Error sending to %s: %v", p.Nickname, err)
 		}
 	}
