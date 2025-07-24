@@ -71,6 +71,8 @@ func handleCreateRoom(w http.ResponseWriter, r *http.Request) {
 	nickname := r.URL.Query().Get("nickname")
 	roomID := uuid.New().String()
 
+	log.Printf("Creating room %s with creator %s", roomID, nickname)
+
 	roomsMu.Lock()
 	rooms[roomID] = &Room{
 		ID:      roomID,
@@ -179,16 +181,19 @@ func broadcastPlayers(room *Room) {
 
 	canStart := allReady && len(playersList) >= 4 && !room.GameStarted
 
+	// Явно добавляем поле creator с ником создателя
 	msg, _ := json.Marshal(map[string]interface{}{
 		"type":        "players_update",
 		"players":     playersList,
 		"canStart":    canStart,
-		"creator":     room.Creator,
+		"creator":     room.Creator, // Это ключевое изменение!
 		"gameStarted": room.GameStarted,
 	})
 
 	for _, p := range room.Players {
-		p.Conn.WriteMessage(websocket.TextMessage, msg)
+		if err := p.Conn.WriteMessage(websocket.TextMessage, msg); err != nil {
+			log.Println("Error sending message:", err)
+		}
 	}
 }
 
