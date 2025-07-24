@@ -71,7 +71,7 @@ func handleCreateRoom(w http.ResponseWriter, r *http.Request) {
 	nickname := r.URL.Query().Get("nickname")
 	roomID := uuid.New().String()
 
-	log.Printf("Creating room %s with creator %s", roomID, nickname)
+	log.Printf("CREATING ROOM: ID=%s, Creator=%s", roomID, nickname)
 
 	roomsMu.Lock()
 	rooms[roomID] = &Room{
@@ -162,7 +162,6 @@ func broadcastPlayers(room *Room) {
 
 	playersList := make([]map[string]interface{}, 0)
 	allReady := true
-	readyCount := 0
 
 	for _, p := range room.Players {
 		playerData := map[string]interface{}{
@@ -172,9 +171,7 @@ func broadcastPlayers(room *Room) {
 		}
 		playersList = append(playersList, playerData)
 
-		if p.Ready {
-			readyCount++
-		} else {
+		if !p.Ready {
 			allReady = false
 		}
 	}
@@ -190,9 +187,12 @@ func broadcastPlayers(room *Room) {
 		"gameStarted": room.GameStarted,
 	})
 
+	log.Printf("Broadcasting to room %s: creator=%s, players=%d",
+		room.ID, room.Creator, len(playersList))
+
 	for _, p := range room.Players {
 		if err := p.Conn.WriteMessage(websocket.TextMessage, msg); err != nil {
-			log.Println("Error sending message:", err)
+			log.Printf("Error sending to %s: %v", p.Nickname, err)
 		}
 	}
 }

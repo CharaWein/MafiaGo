@@ -76,47 +76,42 @@
         const currentNickname = "{{.Nickname}}";
 
         socket.onmessage = function(event) {
-        const data = JSON.parse(event.data);
-        console.log("Received data:", data); // Добавим лог для отладки
-        
-        if (data.type === "players_update") {
-            // Обновляем список игроков
-            const playersList = document.getElementById("playersList");
-            playersList.innerHTML = "";
+            const data = JSON.parse(event.data);
+            console.log("Received FULL data:", data); // Логируем все данные
             
-            // Проверяем, является ли текущий игрок создателем
-            const amICreator = currentNickname === data.creator;
-            console.log("Am I creator?", amICreator, "Creator is:", data.creator);
-            
-            data.players.forEach(player => {
-                const playerElement = document.createElement("div");
-                playerElement.className = "player";
+            if (data.type === "players_update") {
+                // Проверяем, является ли текущий игрок создателем
+                const amICreator = "{{.Nickname}}" === data.creator;
+                console.log("Am I creator?", amICreator, 
+                        "My nickname:", "{{.Nickname}}", 
+                        "Server creator:", data.creator);
+
+                // Обновляем список игроков
+                const playersList = document.getElementById("playersList");
+                playersList.innerHTML = "";
                 
-                playerElement.innerHTML = `
-                    <span>
-                        ${player.nickname}
-                        ${player.nickname === data.creator ? 
-                        '<span class="creator-badge">СОЗДАТЕЛЬ</span>' : ''}
-                    </span>
-                    <span class="${player.ready ? 'ready' : 'not-ready'}">
-                        ${player.ready ? '✓ Готов' : '✗ Не готов'}
-                    </span>
-                `;
-                playersList.appendChild(playerElement);
-            });
-            
-            // Показываем кнопку только если:
-            // 1. Это создатель комнаты
-            // 2. Все игроки готовы
-            // 3. Игроков 4 или больше
-            if (amICreator && data.canStart) {
-                document.getElementById("startGameBtn").style.display = "block";
-                console.log("Showing start button");
-            } else {
-                document.getElementById("startGameBtn").style.display = "none";
+                data.players.forEach(player => {
+                    const playerElement = document.createElement("div");
+                    playerElement.className = "player";
+                    
+                    playerElement.innerHTML = `
+                        <span>
+                            ${player.nickname}
+                            ${player.nickname === data.creator ? 
+                            '<span class="creator-badge">СОЗДАТЕЛЬ</span>' : ''}
+                        </span>
+                        <span class="${player.ready ? 'ready' : 'not-ready'}">
+                            ${player.ready ? '✓ Готов' : '✗ Не готов'}
+                        </span>
+                    `;
+                    playersList.appendChild(playerElement);
+                });
+                
+                // Показываем кнопку только создателю, когда можно начинать
+                document.getElementById("startGameBtn").style.display = 
+                    amICreator && data.canStart ? "block" : "none";
             }
-        }
-    };
+        };
 
         document.getElementById("readyBtn").addEventListener("click", function() {
             isReady = !isReady;
