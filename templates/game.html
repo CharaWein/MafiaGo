@@ -30,8 +30,13 @@
         .not-ready {
             color: red;
         }
-        .creator-crown {
-            color: gold;
+        .creator-badge {
+            display: inline-block;
+            background-color: gold;
+            color: black;
+            padding: 2px 5px;
+            border-radius: 3px;
+            font-size: 12px;
             margin-left: 5px;
         }
         #readyBtn {
@@ -42,15 +47,6 @@
             border-radius: 4px;
             cursor: pointer;
         }
-        .creator-badge {
-            display: inline-block;
-            background-color: gold;
-            color: black;
-            padding: 2px 5px;
-            border-radius: 3px;
-            font-size: 12px;
-            margin-left: 5px;
-        }
         #startGameBtn {
             padding: 10px 20px;
             background: #4CAF50;
@@ -59,7 +55,7 @@
             border-radius: 4px;
             margin-top: 10px;
             cursor: pointer;
-            display: none; /* По умолчанию скрыта */
+            display: none;
         }
     </style>
 </head>
@@ -77,7 +73,7 @@
     <script>
         const socket = new WebSocket(`wss://${window.location.host}/ws?roomID=${encodeURIComponent("{{.RoomID}}")}&nickname=${encodeURIComponent("{{.Nickname}}")}`);
         let isReady = false;
-        let currentNickname = "{{.Nickname}}";
+        const currentNickname = "{{.Nickname}}";
 
         socket.onmessage = function(event) {
             const data = JSON.parse(event.data);
@@ -86,6 +82,10 @@
                 // Обновляем список игроков
                 const playersList = document.getElementById("playersList");
                 playersList.innerHTML = "";
+                
+                // Проверяем, является ли текущий игрок создателем
+                const amICreator = currentNickname === data.creator;
+                console.log("Am I creator?", amICreator, "Creator is:", data.creator);
                 
                 data.players.forEach(player => {
                     const playerElement = document.createElement("div");
@@ -104,14 +104,16 @@
                     playersList.appendChild(playerElement);
                 });
                 
-                // Проверяем, является ли текущий игрок создателем
-                const amICreator = currentNickname === data.creator;
-                
-                // Показываем кнопку если:
-                // 1. Это создатель
-                // 2. Все готовы (data.canStart)
-                document.getElementById("startGameBtn").style.display = 
-                    amICreator && data.canStart ? "block" : "none";
+                // Показываем кнопку только если:
+                // 1. Это создатель комнаты
+                // 2. Все игроки готовы
+                // 3. Игроков 4 или больше
+                if (amICreator && data.canStart) {
+                    document.getElementById("startGameBtn").style.display = "block";
+                    console.log("Showing start button");
+                } else {
+                    document.getElementById("startGameBtn").style.display = "none";
+                }
             }
         };
 
@@ -131,6 +133,14 @@
                 type: "start_game"
             }));
         });
+
+        // Обработчики ошибок
+        socket.onerror = function(error) {
+            console.error("WebSocket error:", error);
+        };
+        socket.onclose = function() {
+            console.log("WebSocket connection closed");
+        };
     </script>
 </body>
 </html>

@@ -75,7 +75,7 @@ func handleCreateRoom(w http.ResponseWriter, r *http.Request) {
 	rooms[roomID] = &Room{
 		ID:      roomID,
 		Players: make(map[string]*Player),
-		Creator: nickname, // Это должно быть установлено
+		Creator: nickname,
 	}
 	roomsMu.Unlock()
 
@@ -179,12 +179,11 @@ func broadcastPlayers(room *Room) {
 
 	canStart := allReady && len(playersList) >= 4 && !room.GameStarted
 
-	// Добавляем информацию о создателе комнаты
 	msg, _ := json.Marshal(map[string]interface{}{
 		"type":        "players_update",
 		"players":     playersList,
 		"canStart":    canStart,
-		"creator":     room.Creator, // Явно отправляем ник создателя
+		"creator":     room.Creator,
 		"gameStarted": room.GameStarted,
 	})
 
@@ -257,7 +256,7 @@ func notifyPlayers(room *Room) {
 			"type":         "game_started",
 			"role":         p.Role,
 			"playersCount": len(room.Players),
-			"mafiaCount":   (len(room.Players)-5)/2 + 1, // +1 для дона
+			"mafiaCount":   (len(room.Players)-5)/2 + 1,
 		})
 		p.Conn.WriteMessage(websocket.TextMessage, msg)
 	}
