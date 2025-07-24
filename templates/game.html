@@ -42,6 +42,15 @@
             border-radius: 4px;
             cursor: pointer;
         }
+        .creator-badge {
+            display: inline-block;
+            background-color: gold;
+            color: black;
+            padding: 2px 5px;
+            border-radius: 3px;
+            font-size: 12px;
+            margin-left: 5px;
+        }
         #startGameBtn {
             padding: 10px 20px;
             background: #4CAF50;
@@ -66,57 +75,46 @@
     </div>
 
     <script>
-        // Подключение WebSocket
         const socket = new WebSocket(`wss://${window.location.host}/ws?roomID=${encodeURIComponent("{{.RoomID}}")}&nickname=${encodeURIComponent("{{.Nickname}}")}`);
         let isReady = false;
-        let amICreator = false;
+        let currentNickname = "{{.Nickname}}";
 
-        // Обработчик сообщений от сервера
         socket.onmessage = function(event) {
             const data = JSON.parse(event.data);
             
             if (data.type === "players_update") {
                 // Обновляем список игроков
-                updatePlayersList(data.players);
+                const playersList = document.getElementById("playersList");
+                playersList.innerHTML = "";
+                
+                data.players.forEach(player => {
+                    const playerElement = document.createElement("div");
+                    playerElement.className = "player";
+                    
+                    playerElement.innerHTML = `
+                        <span>
+                            ${player.nickname}
+                            ${player.nickname === data.creator ? 
+                              '<span class="creator-badge">СОЗДАТЕЛЬ</span>' : ''}
+                        </span>
+                        <span class="${player.ready ? 'ready' : 'not-ready'}">
+                            ${player.ready ? '✓ Готов' : '✗ Не готов'}
+                        </span>
+                    `;
+                    playersList.appendChild(playerElement);
+                });
                 
                 // Проверяем, является ли текущий игрок создателем
-                const currentNickname = "{{.Nickname}}";
-                amICreator = data.players.some(p => p.nickname === currentNickname && p.isCreator);
+                const amICreator = currentNickname === data.creator;
                 
-                // Показываем кнопку только если:
-                // 1. Это создатель комнаты
-                // 2. Все игроки готовы
-                // 3. Игроков 4 или больше
-                const shouldShowStartBtn = amICreator && data.canStart;
+                // Показываем кнопку если:
+                // 1. Это создатель
+                // 2. Все готовы (data.canStart)
                 document.getElementById("startGameBtn").style.display = 
-                    shouldShowStartBtn ? "block" : "none";
+                    amICreator && data.canStart ? "block" : "none";
             }
         };
 
-        // Обновление списка игроков
-        function updatePlayersList(players) {
-            const playersList = document.getElementById("playersList");
-            playersList.innerHTML = "";
-            
-            players.forEach(player => {
-                const playerElement = document.createElement("div");
-                playerElement.className = "player";
-                
-                playerElement.innerHTML = `
-                    <span>
-                        ${player.nickname}
-                        ${player.isCreator ? '<span class="creator-crown">👑</span>' : ''}
-                    </span>
-                    <span class="${player.ready ? 'ready' : 'not-ready'}">
-                        ${player.ready ? '✓ Готов' : '✗ Не готов'}
-                    </span>
-                `;
-                
-                playersList.appendChild(playerElement);
-            });
-        }
-
-        // Обработчик кнопки готовности
         document.getElementById("readyBtn").addEventListener("click", function() {
             isReady = !isReady;
             this.textContent = isReady ? "Готов" : "Не готов";
@@ -128,22 +126,11 @@
             }));
         });
 
-        // Обработчик кнопки старта игры
         document.getElementById("startGameBtn").addEventListener("click", function() {
             socket.send(JSON.stringify({
                 type: "start_game"
             }));
         });
-
-        // Обработчик ошибок
-        socket.onerror = function(error) {
-            console.error("WebSocket error:", error);
-        };
-
-        // Обработчик закрытия соединения
-        socket.onclose = function() {
-            console.log("WebSocket connection closed");
-        };
     </script>
 </body>
 </html>
