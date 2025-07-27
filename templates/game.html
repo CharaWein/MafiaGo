@@ -77,17 +77,9 @@
 
         socket.onmessage = function(event) {
             const data = JSON.parse(event.data);
-            console.log("Received FULL data:", JSON.stringify(data, null, 2)); // Полный лог
+            console.log("Received data:", data);
             
             if (data.type === "players_update") {
-                // Проверяем, является ли текущий игрок создателем
-                const amICreator = "{{.Nickname}}" === data.creator;
-                console.log("Creator check:", {
-                    myNickname: "{{.Nickname}}",
-                    serverCreator: data.creator,
-                    amICreator: amICreator
-                });
-
                 // Обновляем список игроков
                 const playersList = document.getElementById("playersList");
                 playersList.innerHTML = "";
@@ -97,11 +89,7 @@
                     playerElement.className = "player";
                     
                     playerElement.innerHTML = `
-                        <span>
-                            ${player.nickname}
-                            ${player.nickname === data.creator ? 
-                            '<span class="creator-badge">СОЗДАТЕЛЬ</span>' : ''}
-                        </span>
+                        <span>${player.nickname}</span>
                         <span class="${player.ready ? 'ready' : 'not-ready'}">
                             ${player.ready ? '✓ Готов' : '✗ Не готов'}
                         </span>
@@ -109,9 +97,9 @@
                     playersList.appendChild(playerElement);
                 });
                 
-                // Показываем кнопку только создателю
+                // Показываем кнопку ВСЕМ при выполнении условий
                 document.getElementById("startGameBtn").style.display = 
-                    amICreator && data.canStart ? "block" : "none";
+                    data.canStart ? "block" : "none";
             }
         };
 

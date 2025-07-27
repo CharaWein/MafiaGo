@@ -149,9 +149,20 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 					broadcastPlayers(room)
 				}
 			case "start_game":
-				if nickname == room.Creator {
-					startGame(room)
+				room.mu.Lock()
+				if len(room.Players) >= 4 {
+					allReady := true
+					for _, p := range room.Players {
+						if !p.Ready {
+							allReady = false
+							break
+						}
+					}
+					if allReady {
+						startGame(room)
+					}
 				}
+				room.mu.Unlock()
 			}
 		}
 	}
