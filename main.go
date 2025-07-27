@@ -281,8 +281,9 @@ func renderTemplate(w http.ResponseWriter, tmpl string, data interface{}) {
 
 func startGame(room *Room) {
 	room.mu.Lock()
+	defer room.mu.Unlock()
+
 	if room.GameStarted {
-		room.mu.Unlock()
 		return
 	}
 
@@ -291,19 +292,17 @@ func startGame(room *Room) {
 	for _, p := range room.Players {
 		players = append(players, p)
 	}
-	room.mu.Unlock()
 
-	// Распределяем роли
 	assignRoles(players)
 
-	// Отправляем игрокам их роли и перенаправляем
 	for _, p := range players {
 		msg, _ := json.Marshal(map[string]interface{}{
-			"type":     "game_start",
-			"role":     p.Role,
-			"redirect": "/gameplay?roomID=" + room.ID + "&nickname=" + p.Nickname,
+			"type": "game_start",
+			"role": p.Role,
 		})
-		p.Conn.WriteMessage(websocket.TextMessage, msg)
+		if err := p.Conn.WriteMessage(websocket.TextMessage, msg); err != nil {
+			log.Printf("Error sending role to %s: %v", p.Nickname, err)
+		}
 	}
 }
 
