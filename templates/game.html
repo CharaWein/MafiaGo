@@ -78,6 +78,13 @@
         socket.onmessage = function(event) {
             const data = JSON.parse(event.data);
             console.log("Received data:", data);
+
+            if (data.type === "game_start") {
+                // Сохраняем роль в localStorage
+                localStorage.setItem('mafiaRole', data.role);
+                // Перенаправляем на игровой экран
+                window.location.href = data.redirect;
+            }
             
             if (data.type === "players_update") {
                 // Обновляем список игроков

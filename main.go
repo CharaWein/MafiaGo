@@ -51,6 +51,7 @@ func main() {
 	http.HandleFunc("/game", handleGame)
 	http.HandleFunc("/ws", handleWebSocket)
 	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
+	http.HandleFunc("/gameplay", handleGameplay)
 
 	log.Println("Server started on :8080")
 	log.Fatal(http.ListenAndServe(":8080", nil))
@@ -214,55 +215,6 @@ func removePlayer(room *Room, nickname string) {
 	delete(room.Players, nickname)
 }
 
-func startGame(room *Room) {
-	room.mu.Lock()
-	if room.GameStarted {
-		room.mu.Unlock()
-		return
-	}
-
-	room.GameStarted = true
-	players := make([]*Player, 0, len(room.Players))
-	for _, p := range room.Players {
-		players = append(players, p)
-	}
-	room.mu.Unlock()
-
-	assignRoles(players)
-	notifyPlayers(room)
-	startNightPhase(room)
-}
-
-func assignRoles(players []*Player) {
-	count := len(players)
-	if count < 4 {
-		return
-	}
-
-	mafiaCount := (count - 5) / 2
-	if mafiaCount < 1 {
-		mafiaCount = 1
-	}
-
-	roles := make([]string, 0, count)
-	roles = append(roles, "mafia_don")
-	for i := 0; i < mafiaCount; i++ {
-		roles = append(roles, "mafia")
-	}
-	roles = append(roles, "sheriff")
-	for i := len(roles); i < count; i++ {
-		roles = append(roles, "civilian")
-	}
-
-	rng.Shuffle(len(roles), func(i, j int) {
-		roles[i], roles[j] = roles[j], roles[i]
-	})
-
-	for i, p := range players {
-		p.Role = roles[i]
-	}
-}
-
 func notifyPlayers(room *Room) {
 	room.mu.Lock()
 	defer room.mu.Unlock()
@@ -325,4 +277,71 @@ func renderTemplate(w http.ResponseWriter, tmpl string, data interface{}) {
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
+}
+
+func startGame(room *Room) {
+	room.mu.Lock()
+	if room.GameStarted {
+		room.mu.Unlock()
+		return
+	}
+
+	room.GameStarted = true
+	players := make([]*Player, 0, len(room.Players))
+	for _, p := range room.Players {
+		players = append(players, p)
+	}
+	room.mu.Unlock()
+
+	// Распределяем роли
+	assignRoles(players)
+
+	// Отправляем игрокам их роли и перенаправляем
+	for _, p := range players {
+		msg, _ := json.Marshal(map[string]interface{}{
+			"type":     "game_start",
+			"role":     p.Role,
+			"redirect": "/gameplay?roomID=" + room.ID + "&nickname=" + p.Nickname,
+		})
+		p.Conn.WriteMessage(websocket.TextMessage, msg)
+	}
+}
+
+func assignRoles(players []*Player) {
+	count := len(players)
+	roles := make([]string, 0, count)
+
+	// Базовые роли
+	roles = append(roles, "mafia_don", "sheriff")
+
+	// Дополнительные мафии (1 на 4 игрока)
+	mafiaCount := (count - 3) / 2
+	if mafiaCount > 0 {
+		for i := 0; i < mafiaCount; i++ {
+			roles = append(roles, "mafia")
+		}
+	}
+
+	// Остальные - мирные жители
+	for len(roles) < count {
+		roles = append(roles, "civilian")
+	}
+
+	// Перемешиваем роли
+	rng.Shuffle(len(roles), func(i, j int) {
+		roles[i], roles[j] = roles[j], roles[i]
+	})
+
+	// Назначаем роли игрокам
+	for i, p := range players {
+		p.Role = roles[i]
+	}
+}
+
+func handleGameplay(w http.ResponseWriter, r *http.Request) {
+	data := map[string]string{
+		"RoomID":   r.URL.Query().Get("roomID"),
+		"Nickname": r.URL.Query().Get("nickname"),
+	}
+	renderTemplate(w, "gameplay.html", data)
 }
